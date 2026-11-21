@@ -45,7 +45,27 @@
       "electron/main.js",
       "electron/preload.cjs",
       "electron/index.html"
-    ]
+    ],
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Inkwell",
+      "artifactName": "Inkwell Setup ${version}.${ext}"
+    }
   },
   "allowScripts": {}
 }
