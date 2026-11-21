@@ -2,7 +2,7 @@
 
 <img src="public/inkwell.svg" alt="Inkwell logo" width="72" valign="middle">&nbsp;&nbsp;<font size="6">**Inkwell**</font>
 
-**写下来，就留在这台电脑上**
+**落笔即安**
 
 [![status](https://img.shields.io/badge/version-0.1.0--alpha-orange)](https://github.com/skpcd/inkwell/releases)
 [![platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-blue)](#下载安装)
@@ -16,7 +16,7 @@
 
 ---
 
-Inkwell 是**本地优先**的 Markdown 写作软件：打开一个文件夹就是你的资料库，`.md` 文件永远是你的文件。不搞数据库、不搞云、不搞账号 —— 写下来，就留在这台电脑上。
+Inkwell 是**本地优先**的 Markdown 写作软件：打开一个文件夹就是你的资料库，`.md` 文件永远是你的文件。不搞数据库、不搞云、不搞账号 —— 落笔即安。
 
 <img src="assets/screenshot.png" alt="Inkwell 截图" width="900">
 
