@@ -73,7 +73,7 @@ root.innerHTML = `
 <div id="app-root">
   <header class="topbar">
     ${isMac ? '<div class="traffic-dots"><span class="dot-close"></span><span class="dot-min"></span><span class="dot-max"></span></div>' : ''}
-    <span class="brand"><svg viewBox="0 0 512 512" width="18" height="18" aria-hidden="true"><rect width="512" height="512" rx="112" fill="#FFFFFF"/><rect x="16" y="16" width="480" height="480" rx="96" fill="none" stroke="#E4E2DB" stroke-width="8"/><path d="M96 380 C 180 372, 300 356, 396 288" fill="none" stroke="#2C2C2A" stroke-width="34" stroke-linecap="round"/><g transform="rotate(-38 300 176)"><path d="M300 96 L342 216 L300 248 L258 216 Z" fill="#2C2C2A"/><circle cx="300" cy="196" r="13" fill="#FFFFFF"/><path d="M300 209 L300 248" stroke="#FFFFFF" stroke-width="9" stroke-linecap="round"/></g><path d="M236 300 c 11 17, 17 26, 17 36 a 17 17 0 1 1 -34 0 c 0 -10, 6 -19, 17 -36 z" fill="#D85A30"/></svg></span>
+    <span class="brand"><svg viewBox="0 0 512 512" width="18" height="18" aria-hidden="true"><rect width="512" height="512" rx="112" fill="#FFFFFF"/><rect x="16" y="16" width="480" height="480" rx="96" fill="none" stroke="#E4E2DB" stroke-width="8"/><path d="M88 372 C 170 368, 260 360, 340 330" fill="none" stroke="#2C2C2A" stroke-width="30" stroke-linecap="round"/><g transform="rotate(-40 296 180)"><path d="M296 84 L348 210 L296 252 L244 210 Z" fill="#2C2C2A"/><circle cx="296" cy="192" r="16" fill="#FFFFFF"/><path d="M296 208 L296 252" stroke="#FFFFFF" stroke-width="10" stroke-linecap="round"/></g><path d="M236 300 c 11 17, 17 26, 17 36 a 17 17 0 1 1 -34 0 c 0 -10, 6 -19, 17 -36 z" fill="#D85A30"/></svg></span>
     <span class="app-title">Inkwell</span>
     <button class="vault-name" id="vault-btn" title="${t('openVaultTitle')}">${t('vault')}</button>
     <div class="seg" id="view-seg">
@@ -990,10 +990,10 @@ function openSettings() {
           <div class="set-label">${t('accent')}</div>
           <div class="set-list" id="accent-list"></div>
         </div>
-      </div>
-      <div class="set-group" id="lang-group">
-        <div class="set-label">${t('langLabel')}</div>
-        <div class="set-list" id="lang-list"></div>
+        <div class="set-group" id="lang-group">
+          <div class="set-label">${t('langLabel')}</div>
+          <div class="set-list" id="lang-list"></div>
+        </div>
       </div>
       <div class="set-group" id="update-group">
         <div class="set-label">${t('update')}</div>
@@ -1019,7 +1019,7 @@ function openSettings() {
 
   // accent swatches (DOM-built, compact swatch-only grid)
   const accentList = wrap.querySelector('#accent-list') as HTMLElement
-  for (const [id, a] of Object.entries(ACCENTS)) {
+  for (const [id, a] of Object.entries({ graphite: ACCENTS.graphite, coral: ACCENTS.coral, ocean: ACCENTS.ocean, forest: ACCENTS.forest, violet: ACCENTS.violet })) {
     const b = document.createElement('button')
     b.className = 'sw-pick' + (state.accent === id ? ' on' : '')
     b.title = a.name
@@ -1051,15 +1051,18 @@ function openSettings() {
     for (let i = 0; i < 3; i++) if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) - (pb[i] || 0)
     return 0
   }
-  updState.textContent = '…'
-  // silent version fill on open (no click needed)
   const verCache = (openSettings as any).__verCache as string | undefined
-  if (api.checkUpdate && !verCache) {
-    api.checkUpdate().then(r => {
-      ;(openSettings as any).__verCache = r.current || ''
-      if (r.current) updState.textContent = t('curVersion', { v: 'v' + r.current })
-      if (r.version && r.current && r.version === r.current) updBtn.textContent = t('checkUpdate')
-    }).catch(() => {})
+  if (verCache) {
+    updState.textContent = t('curVersion', { v: 'v' + verCache })
+  } else {
+    // hide placeholder until version resolves; fill silently in background
+    updState.textContent = ''
+    if (api.checkUpdate) {
+      api.checkUpdate().then(r => {
+        ;(openSettings as any).__verCache = r.current || ''
+        if (r.current && updState.isConnected) updState.textContent = t('curVersion', { v: 'v' + r.current })
+      }).catch(() => { if (updState.isConnected) updState.textContent = '' })
+    }
   }
   updBtn.addEventListener('click', async () => {
     if (!api.checkUpdate) return
