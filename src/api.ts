@@ -22,7 +22,9 @@ const webApi: InkwellApi = {
   isElectron: false,
 
   async pickFolder() {
-    const name = prompt('给这个资料库起个名字：', '我的笔记')
+    // prompt() is unavailable under Electron; the app injects window.__inkAsk when it loads
+    const ask = (window as any).__inkAsk as ((title: string, initial: string) => Promise<string | null>) | undefined
+    const name = ask ? await ask('给这个资料库起个名字：', '我的笔记') : prompt('给这个资料库起个名字：', '我的笔记')
     if (!name) return null
     const key = 'vault:' + name
     if (!lsGet(key)) {

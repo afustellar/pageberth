@@ -20,6 +20,7 @@ interface FileMeta {
   path: string
   name: string
   label: string
+  scratch?: boolean
 }
 
 const $ = <T extends HTMLElement>(sel: string) => document.querySelector(sel) as T
@@ -131,8 +132,11 @@ function ensureEditor() {
 
 function applyView() {
   const v = state.view
-  editorPane.style.display = v === 'preview' ? 'none' : ''
-  previewPane.style.display = v === 'edit' ? 'none' : ''
+  const active = !!state.current
+  // welcome screen owns the workspace until a file is open
+  editorPane.style.display = !active || v === 'preview' ? 'none' : ''
+  previewPane.style.display = !active || v === 'edit' ? 'none' : ''
+  welcomeEl.style.display = active ? 'none' : ''
   localStorage.setItem('inkwell:view', v)
   document.querySelectorAll<HTMLButtonElement>('#view-seg button').forEach(b => {
     b.classList.toggle('on', b.dataset.view === v)
@@ -269,11 +273,13 @@ async function refreshFiles(keepPath?: string) {
 function renderFileList() {
   const q = filterInput.value.trim().toLowerCase()
   fileList.innerHTML = ''
-  const shown = state.files.filter(f => !q || f.label.toLowerCase().includes(q))
+  // scratch draft sits on top of the list
+  const items: FileMeta[] = state.current?.scratch ? [state.current, ...state.files] : state.files
+  const shown = items.filter(f => !q || f.label.toLowerCase().includes(q))
   if (!shown.length) {
     const tip = document.createElement('div')
     tip.className = 'sidebar-empty'
-    tip.textContent = state.files.length ? '没有匹配的笔记' : '资料库还是空的，点右上角「＋」新建一篇'
+    tip.textContent = state.files.length || state.current?.scratch ? '没有匹配的笔记' : '资料库还是空的，点右上角「＋」新建一篇'
     fileList.appendChild(tip)
     return
   }
@@ -283,8 +289,14 @@ function renderFileList() {
     const span = document.createElement('span')
     span.textContent = f.label
     b.appendChild(span)
+    if (f.scratch) {
+      const badge = document.createElement('span')
+      badge.className = 'draft-badge'
+      badge.textContent = '草稿'
+      b.appendChild(badge)
+    }
     b.title = f.name
-    b.onclick = () => openFile(f)
+    b.onclick = () => { if (state.current?.path !== f.path) void openFile(f) }
     fileList.appendChild(b)
   }
 }
@@ -298,7 +310,7 @@ async function openFile(f: FileMeta) {
   })
   state.current = f
   renderFileList()
-  welcomeEl.style.display = 'none'
+  applyView()
   setSaveState('clean')
   updateStatus()
   renderPreview()
@@ -312,12 +324,17 @@ function onDocChanged() {
   renderPreview()
   renderOutline()
   setSaveState('dirty')
+  if (state.current.scratch) return // scratch drafts save only on demand
   clearTimeout(state.saveTimer)
   state.saveTimer = setTimeout(saveCurrent, 600)
 }
 
 async function saveCurrent() {
   if (!state.current || !editor) return
+  if (state.current.scratch) {
+    await materializeScratch()
+    return
+  }
   const content = editor.view.state.doc.toString()
   const ok = await api.writeFile(state.current.path, content)
   if (ok) {
@@ -327,11 +344,35 @@ async function saveCurrent() {
 }
 
 async function newNote() {
+  // scratch flow: start writing immediately; pick a home at first save
+  const draft: FileMeta = { path: 'scratch:未命名', name: '未命名.md', label: '未命名', scratch: true }
+  if (state.current && state.dirty) await saveCurrent()
+  state.current = draft
+  ensureEditor().view.dispatch({
+    changes: { from: 0, to: editor!.view.state.doc.length, insert: `# 未命名\n\n` }
+  })
+  if (state.view === 'preview') {
+    state.view = 'split'
+  }
+  applyView()
+  renderFileList()
+  setSaveState('dirty')
+  updateStatus()
+  renderPreview()
+  renderOutline()
+  editor!.view.focus()
+}
+
+/** Materialize the scratch draft into a real file. Returns the file or null if user canceled. */
+async function materializeScratch(): Promise<FileMeta | null> {
+  const draft = state.current
+  if (!draft || !draft.scratch) return draft ?? null
   if (!state.vault) {
     const ok = await pickVault()
-    if (!ok) return
+    if (!ok) return null
   }
-  const base = '未命名'
+  const title = (editor?.view.state.doc.line(1).text.replace(/^#\s*/, '').trim()) || draft.label
+  const base = title || '未命名'
   let name = base
   let i = 1
   const have = new Set(state.files.map(f => f.name))
@@ -339,19 +380,33 @@ async function newNote() {
   const r = await api.createFile(state.vault!, name)
   if (!r.ok || !r.path) {
     alert(r.error || '创建失败')
-    return
+    return null
   }
-  await refreshFiles(r.path)
-  if (state.view === 'preview') {
-    state.view = 'split'
-    applyView()
+  const content = editor!.view.state.doc.toString()
+  const okWrite = await api.writeFile(r.path, content)
+  if (!okWrite) {
+    alert('保存失败')
+    return null
   }
-  const ed = ensureEditor()
-  ed.view.focus()
+  const real: FileMeta = { path: r.path, name: r.name || `${name}.md`, label: labelOf(r.name || `${name}.md`) }
+  editorCache.set(real.path, content)
+  state.current = real
+  await refreshFiles(real.path)
+  return real
 }
 
 async function deleteCurrent() {
   if (!state.current) return
+  if (state.current.scratch) {
+    // discard draft, back to welcome
+    state.current = null
+    editor?.view.dispatch({ changes: { from: 0, to: editor.view.state.doc.length, insert: '' } })
+    applyView()
+    renderFileList()
+    updateStatus()
+    renderPreview()
+    return
+  }
   if (!confirm(`删除「${state.current.name}」？此操作不可撤销。`)) return
   const ok = await api.deleteFile(state.current.path)
   if (!ok) {
@@ -361,17 +416,28 @@ async function deleteCurrent() {
   editorCache.delete(state.current.path)
   state.current = null
   editor?.view.dispatch({ changes: { from: 0, to: editor.view.state.doc.length, insert: '' } })
-  welcomeEl.style.display = ''
+  applyView()
   updateStatus()
   renderPreview()
   await refreshFiles()
 }
 
 async function renameCurrent() {
-  if (!state.current) return
-  const newName = prompt('重命名为（不含扩展名）：', state.current.label)
+  if (!state.current || !editor) return
+  if (state.current.scratch) {
+    // renaming the draft = retitling it before first save
+    const newName = await askText(`给这篇笔记起个名字：`, state.current.label)
+    if (!newName || newName.trim() === state.current.label) return
+    const safe = newName.trim()
+    editor.view.dispatch({
+      changes: { from: 0, to: editor.view.state.doc.length, insert: editor.view.state.doc.toString().replace(/^(#\s*).*$/m, `$1${safe}`) }
+    })
+    state.current = { ...state.current, label: safe, name: `${safe}.md` }
+    renderFileList()
+    return
+  }
+  const newName = await askText('重命名为（不含扩展名）：', state.current.label)
   if (!newName || newName.trim() === state.current.label) return
-  if (!editor) return
   const content = editor.view.state.doc.toString()
   await api.writeFile(state.current.path, content) // flush pending changes first
   const r = await api.renameFile(state.current.path, newName.trim())
@@ -408,7 +474,7 @@ async function pickVault(): Promise<boolean> {
   try { localStorage.setItem('inkwell:lastVault', v) } catch { /* ignore */ }
   vaultBtn.textContent = api.isElectron ? v.split(/[\\/]/).pop() || v : v
   vaultBtn.title = v
-  welcomeEl.style.display = 'none'
+  applyView()
   await refreshFiles()
   return true
 }
@@ -424,7 +490,7 @@ async function resumeLastVault(): Promise<boolean> {
   state.vault = last
   vaultBtn.textContent = api.isElectron ? last.split(/[\\/]/).pop() || last : last
   vaultBtn.title = last
-  welcomeEl.style.display = 'none'
+  applyView()
   await refreshFiles()
   return true
 }
@@ -433,7 +499,7 @@ async function resumeLastVault(): Promise<boolean> {
 
 function renderGraphView() {
   const svg = $('#graph-svg')
-  const input = state.files.map(f => ({
+  const input = state.files.filter(f => !f.scratch).map(f => ({
     label: f.label,
     outgoing: extractWikiLinks(editorCache.get(f.path) ?? '').map(l => l.target)
   }))
@@ -507,6 +573,45 @@ function setTypewriter(on: boolean) {
   state.typewriter = on
   $('#tw-btn').classList.toggle('on', on)
 }
+
+/* ---------- In-app text prompt (prompt() is unavailable in Electron) ---------- */
+
+function askText(title: string, initial: string): Promise<string | null> {
+  return new Promise(resolve => {
+    const wrap = document.createElement('div')
+    wrap.id = 'ask-overlay'
+    wrap.className = 'modal-overlay'
+    wrap.innerHTML = `
+      <div class="modal ask-modal">
+        <div class="modal-head"><span class="label"></span></div>
+        <input id="ask-input" />
+        <div class="ask-actions">
+          <button id="ask-cancel">取消</button>
+          <button id="ask-ok" class="primary">确定</button>
+        </div>
+      </div>`
+    ;(wrap.querySelector('.label') as HTMLElement).textContent = title
+    $('#palette-root').appendChild(wrap)
+    const input = $<HTMLInputElement>('#ask-input')
+    input.value = initial
+    input.focus()
+    input.select()
+    const done = (v: string | null) => {
+      wrap.remove()
+      resolve(v)
+      editor?.view.focus()
+    }
+    $('#ask-ok').addEventListener('click', () => done(input.value.trim() || null))
+    $('#ask-cancel').addEventListener('click', () => done(null))
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); done(input.value.trim() || null) }
+      else if (e.key === 'Escape') done(null)
+    })
+    wrap.addEventListener('mousedown', e => { if (e.target === wrap) done(null) })
+  })
+}
+
+;(window as any).__inkAsk = askText
 
 /* ---------- Command palette ---------- */
 
@@ -679,7 +784,7 @@ window.addEventListener('keydown', e => {
 })
 
 window.addEventListener('beforeunload', () => {
-  if (state.dirty) void saveCurrent()
+  if (state.dirty && state.current && !state.current.scratch) void saveCurrent()
 })
 
 /* ---------- Boot ---------- */

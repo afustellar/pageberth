@@ -601,3 +601,59 @@ input {
 .welcome button:hover { opacity: 0.88; }
 
 .welcome .row { display: flex; gap: 10px; }
+
+/* ---------- Ask dialog ---------- */
+
+.ask-modal { width: min(380px, 88vw); padding-bottom: 12px; }
+
+.ask-modal input {
+  display: block;
+  width: calc(100% - 32px);
+  margin: 4px 16px 0;
+  padding: 7px 10px;
+  border-radius: 7px;
+  border: 1px solid var(--ink-border);
+  background: var(--ink-input);
+  color: var(--ink-fg);
+  outline: none;
+  font-size: 13.5px;
+}
+
+.ask-modal input:focus { border-color: var(--ink-accent); }
+
+.ask-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 14px 16px 0;
+}
+
+.ask-actions button {
+  padding: 5px 14px;
+  border-radius: 7px;
+  font-size: 12.5px;
+  border: 1px solid var(--ink-border);
+  color: var(--ink-fg);
+}
+
+.ask-actions button:hover { background: var(--ink-active); }
+
+.ask-actions button.primary {
+  background: var(--ink-accent);
+  border-color: var(--ink-accent);
+  color: var(--ink-bg);
+  font-weight: 600;
+}
+
+.ask-actions button.primary:hover { opacity: 0.9; }
+
+/* scratch draft badge in file list */
+.file-item .draft-badge {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--ink-accent);
+  border: 1px solid var(--ink-accent);
+  border-radius: 999px;
+  padding: 0 6px;
+  flex-shrink: 0;
+}
