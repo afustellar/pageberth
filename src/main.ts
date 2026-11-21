@@ -813,7 +813,15 @@ function applyThemeUI() {
 }
 
 function toggleTheme() {
-  setThemeMode(state.theme === 'dark' ? 'light' : 'dark')
+  const cur = (localStorage.getItem('inkwell:themeMode') || 'auto') as 'light' | 'dark' | 'auto'
+  const next = cur === 'auto' ? 'light' : cur === 'light' ? 'dark' : 'auto'
+  setThemeMode(next)
+  // toast-like hint in the status bar
+  const st = document.getElementById('st-save')
+  if (st) {
+    st.textContent = next === 'auto' ? '主题：跟随系统' : next === 'light' ? '主题：浅色' : '主题：深色'
+    setTimeout(() => { setSaveState(state.dirty ? 'dirty' : 'clean') }, 1500)
+  }
 }
 
 /* ---------- Theme mode (light / dark / auto) ---------- */
@@ -912,92 +920,78 @@ function openSettings() {
   const wrap = document.createElement('div')
   wrap.id = 'settings-modal'
   wrap.className = 'modal-overlay'
-  const opt = (id: string, label: string, swatch: string, cur: boolean) =>
-    `<button class="set-opt${cur ? ' on' : ''}" data-hc="${id}"><span class="sw" style="background:${swatch}"></span>${label}${cur ? '<span class="set-check">✓</span>' : ''}</button>`
   const seg = (group: string, idx: number, labels: string[]) =>
     `<div class="set-seg" data-group="${group}">${labels.map((t, i) => `<button data-i="${i}" class="${i === idx ? 'on' : ''}">${t}</button>`).join('')}</div>`
-  const hc = state.heading
-  const th = state.theme
-  const themeOpt = (id: ThemeName | 'auto', label: string, cur: boolean) =>
-    `<button class="set-opt${cur ? ' on' : ''}" data-theme="${id}"><span class="sw" style="background:${id === 'light' ? '#FFFFFF' : id === 'dark' ? '#17161B' : 'linear-gradient(90deg,#FFFFFF 50%,#17161B 50%)'};box-shadow:inset 0 0 0 1px var(--ink-border)"></span>${label}${cur ? '<span class="set-check">✓</span>' : ''}</button>`
   wrap.innerHTML = `
     <div class="modal settings-modal">
       <div class="modal-head">
         <span class="label">设置</span>
         <button class="icon-btn" id="settings-close" title="关闭" aria-label="关闭">✕</button>
       </div>
-      <div class="set-group">
-        <div class="set-label">主题色</div>
-        <div class="set-list" id="accent-list"></div>
-      </div>
-      <div class="set-group">
-        <div class="set-label">主题（明暗）</div>
-        <div class="set-list">
-          ${themeOpt('auto', '跟随系统', th === (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') && localStorage.getItem('inkwell:themeMode') === 'auto')}
-          ${themeOpt('light', '浅色', th === 'light' && localStorage.getItem('inkwell:themeMode') !== 'auto')}
-          ${themeOpt('dark', '深色', th === 'dark' && localStorage.getItem('inkwell:themeMode') !== 'auto')}
+      <div class="set-cols">
+        <div class="set-group">
+          <div class="set-label">主题色</div>
+          <div class="set-list" id="accent-list"></div>
+        </div>
+        <div class="set-group">
+          <div class="set-label">标题颜色</div>
+          <div class="set-list" id="heading-list"></div>
         </div>
       </div>
-      <div class="set-group">
-        <div class="set-label">标题颜色</div>
-        <div class="set-list">
-          ${opt('ink', '墨黑（默认）', '#242320', hc === 'ink')}
-          ${opt('violet', '紫罗兰（原设计稿）', '#534AB7', hc === 'violet')}
-          ${opt('coral', '珊瑚', '#B4451F', hc === 'coral')}
+      <div class="set-cols">
+        <div class="set-group">
+          <div class="set-label">字号</div>
+          ${seg('font', state.fontIdx, ['小', '中', '大'])}
+        </div>
+        <div class="set-group">
+          <div class="set-label">行距</div>
+          ${seg('line', state.lineIdx, ['紧凑', '适中', '宽松'])}
         </div>
       </div>
-      <div class="set-group">
-        <div class="set-label">字号</div>
-        ${seg('font', state.fontIdx, ['小', '中', '大'])}
-      </div>
-      <div class="set-group">
-        <div class="set-label">行距</div>
-        ${seg('line', state.lineIdx, ['紧凑', '适中', '宽松'])}
-      </div>
+      <div class="set-hint">明暗模式：点顶栏 ☾ / ☀ 按钮循环 切换（浅色 → 深色 → 跟随系统）</div>
     </div>`
   wrap.addEventListener('mousedown', e => { if (e.target === wrap) closeSettings() })
   $('#palette-root').appendChild(wrap)
   $('#settings-close').addEventListener('click', closeSettings)
-  // accent list
+
+  // accent swatches (DOM-built, compact swatch-only grid)
   const accentList = wrap.querySelector('#accent-list') as HTMLElement
   for (const [id, a] of Object.entries(ACCENTS)) {
     const b = document.createElement('button')
-    b.className = 'set-opt' + (state.accent === id ? ' on' : '')
+    b.className = 'sw-pick' + (state.accent === id ? ' on' : '')
+    b.title = a.name
     const sw = document.createElement('span')
     sw.className = 'sw'
     sw.style.background = a.light.accent
     b.appendChild(sw)
-    const label = document.createElement('span')
-    label.textContent = a.name
-    b.appendChild(label)
-    if (state.accent === id) {
-      const chk = document.createElement('span')
-      chk.className = 'set-check'
-      chk.textContent = '✓'
-      b.appendChild(chk)
-    }
-    b.onclick = () => { setAccent(id as AccentId); closeSettings() }
+    if (state.accent === id) b.classList.add('cur')
+    b.onclick = () => { setAccent(id as AccentId); openSettings() /* reopen to refresh state */; wrap.remove() }
     accentList.appendChild(b)
   }
-  wrap.querySelectorAll<HTMLButtonElement>('.set-opt[data-theme]').forEach(b => {
-    b.addEventListener('click', () => {
-      setThemeMode(b.dataset.theme as 'light' | 'dark' | 'auto')
-      closeSettings()
-    })
-  })
-  wrap.querySelectorAll<HTMLButtonElement>('.set-opt[data-hc]').forEach(b => {
-    b.addEventListener('click', () => {
-      setHeadingColor(b.dataset.hc as HeadingColor)
-      closeSettings()
-    })
-  })
+  // heading colors: swatch-only too
+  const HEADINGS_SW: [string, string, string][] = [
+    ['ink', '墨黑', '#242320'],
+    ['violet', '紫罗兰', '#534AB7'],
+    ['coral', '珊瑚', '#B4451F']
+  ]
+  const headingList = wrap.querySelector('#heading-list') as HTMLElement
+  for (const [id, name, color] of HEADINGS_SW) {
+    const b = document.createElement('button')
+    b.className = 'sw-pick' + (state.heading === id ? ' on' : '')
+    b.title = name
+    const sw = document.createElement('span')
+    sw.className = 'sw'
+    sw.style.background = color
+    b.appendChild(sw)
+    b.onclick = () => { setHeadingColor(id as HeadingColor); openSettings(); wrap.remove() }
+    headingList.appendChild(b)
+  }
   wrap.querySelectorAll<HTMLButtonElement>('.set-seg button').forEach(b => {
     b.addEventListener('click', () => {
       const group = (b.closest('.set-seg') as HTMLElement).dataset.group
       const i = Number(b.dataset.i)
       if (group === 'font') setFontIdx(i)
       else setLineIdx(i)
-      // refresh active state
       wrap.querySelectorAll<HTMLButtonElement>(`.set-seg[data-group="${group}"] button`).forEach(x => {
         x.classList.toggle('on', Number(x.dataset.i) === i)
       })
