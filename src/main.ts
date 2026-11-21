@@ -806,9 +806,41 @@ function applyThemeUI() {
 }
 
 function toggleTheme() {
-  state.theme = state.theme === 'dark' ? 'light' : 'dark'
+  setThemeMode(state.theme === 'dark' ? 'light' : 'dark')
+}
+
+/* ---------- Theme mode (light / dark / auto) ---------- */
+
+let themeMedia: MediaQueryList | null = null
+
+function systemPrefersDark(): boolean {
+  return window.matchMedia('(prefers-color-scheme: dark)').matches
+}
+
+function setThemeMode(mode: 'light' | 'dark' | 'auto') {
+  try { localStorage.setItem('inkwell:themeMode', mode) } catch { /* ignore */ }
+  if (themeMedia) themeMedia.onchange = null
+  if (mode === 'auto') {
+    themeMedia = window.matchMedia('(prefers-color-scheme: dark)')
+    themeMedia.onchange = () => {
+      if ((localStorage.getItem('inkwell:themeMode') || 'auto') !== 'auto') return
+      state.theme = systemPrefersDark() ? 'dark' : 'light'
+      applyTheme(state.theme, state.heading)
+      applyThemeUI()
+    }
+    state.theme = systemPrefersDark() ? 'dark' : 'light'
+  } else {
+    themeMedia = null
+    state.theme = mode
+  }
   applyTheme(state.theme, state.heading)
   applyThemeUI()
+}
+
+function loadThemeMode(): 'light' | 'dark' | 'auto' {
+  let m: string | null = null
+  try { m = localStorage.getItem('inkwell:themeMode') } catch { /* ignore */ }
+  return m === 'auto' || m === 'light' || m === 'dark' ? m : 'auto'
 }
 
 /* ---------- Settings ---------- */
@@ -869,11 +901,22 @@ function openSettings() {
   const seg = (group: string, idx: number, labels: string[]) =>
     `<div class="set-seg" data-group="${group}">${labels.map((t, i) => `<button data-i="${i}" class="${i === idx ? 'on' : ''}">${t}</button>`).join('')}</div>`
   const hc = state.heading
+  const th = state.theme
+  const themeOpt = (id: ThemeName | 'auto', label: string, cur: boolean) =>
+    `<button class="set-opt${cur ? ' on' : ''}" data-theme="${id}"><span class="sw" style="background:${id === 'light' ? '#FFFFFF' : id === 'dark' ? '#17161B' : 'linear-gradient(90deg,#FFFFFF 50%,#17161B 50%)'};box-shadow:inset 0 0 0 1px var(--ink-border)"></span>${label}${cur ? '<span class="set-check">✓</span>' : ''}</button>`
   wrap.innerHTML = `
     <div class="modal settings-modal">
       <div class="modal-head">
         <span class="label">设置</span>
         <button class="icon-btn" id="settings-close" title="关闭" aria-label="关闭">✕</button>
+      </div>
+      <div class="set-group">
+        <div class="set-label">主题</div>
+        <div class="set-list">
+          ${themeOpt('auto', '跟随系统', th === (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') && localStorage.getItem('inkwell:themeMode') === 'auto')}
+          ${themeOpt('light', '浅色', th === 'light' && localStorage.getItem('inkwell:themeMode') !== 'auto')}
+          ${themeOpt('dark', '深色', th === 'dark' && localStorage.getItem('inkwell:themeMode') !== 'auto')}
+        </div>
       </div>
       <div class="set-group">
         <div class="set-label">标题颜色</div>
@@ -895,7 +938,13 @@ function openSettings() {
   wrap.addEventListener('mousedown', e => { if (e.target === wrap) closeSettings() })
   $('#palette-root').appendChild(wrap)
   $('#settings-close').addEventListener('click', closeSettings)
-  wrap.querySelectorAll<HTMLButtonElement>('.set-opt').forEach(b => {
+  wrap.querySelectorAll<HTMLButtonElement>('.set-opt[data-theme]').forEach(b => {
+    b.addEventListener('click', () => {
+      setThemeMode(b.dataset.theme as 'light' | 'dark' | 'auto')
+      closeSettings()
+    })
+  })
+  wrap.querySelectorAll<HTMLButtonElement>('.set-opt[data-hc]').forEach(b => {
     b.addEventListener('click', () => {
       setHeadingColor(b.dataset.hc as HeadingColor)
       closeSettings()
@@ -1018,7 +1067,120 @@ function score(s: string, q: string): number {
 let paletteSel = 0
 let paletteItems: Command[] = []
 
-/* ---------- Full-text search across notes ---------- */
+/* ---------- Context menu ---------- */
+
+interface MenuEntry {
+  label?: string
+  action?: () => void
+  danger?: boolean
+  sep?: boolean
+}
+
+function openContextMenu(x: number, y: number, entries: MenuEntry[]) {
+  $('#ctx-menu')?.remove()
+  const menu = document.createElement('div')
+  menu.id = 'ctx-menu'
+  menu.className = 'ctx-menu'
+  for (const e of entries) {
+    if (e.sep) {
+      const hr = document.createElement('div')
+      hr.className = 'ctx-sep'
+      menu.appendChild(hr)
+      continue
+    }
+    const b = document.createElement('button')
+    b.className = 'ctx-item' + (e.danger ? ' danger' : '')
+    b.textContent = e.label ?? ''
+    b.onclick = () => { menu.remove(); e.action?.() }
+    menu.appendChild(b)
+  }
+  document.body.appendChild(menu)
+  // keep inside viewport
+  const r = menu.getBoundingClientRect()
+  menu.style.left = Math.min(x, window.innerWidth - r.width - 8) + 'px'
+  menu.style.top = Math.min(y, window.innerHeight - r.height - 8) + 'px'
+  const close = (ev: MouseEvent) => {
+    if (!menu.contains(ev.target as Node)) menu.remove()
+    document.removeEventListener('mousedown', close)
+  }
+  setTimeout(() => document.addEventListener('mousedown', close), 0)
+}
+
+function fileContextEntries(f: FileMeta): MenuEntry[] {
+  const entries: MenuEntry[] = [
+    { label: '打开', action: () => void openFile(f) },
+    { sep: true }
+  ]
+  if (!f.scratch) {
+    entries.push({
+      label: '导出 HTML',
+      action: () => {
+        void (async () => {
+          if (state.current?.path !== f.path) await openFile(f)
+          void exportHtml()
+        })()
+      }
+    })
+    entries.push({
+      label: '导出 PDF',
+      action: () => {
+        void (async () => {
+          if (state.current?.path !== f.path) await openFile(f)
+          void exportPdf()
+        })()
+      }
+    })
+    entries.push({ sep: true })
+    entries.push({
+      label: '删除',
+      danger: true,
+      action: () => {
+        void (async () => {
+          if (state.current?.path === f.path) await deleteCurrent()
+          else {
+            if (!confirm(`删除「${f.name}」？此操作不可撤销。`)) return
+            const ok = await api.deleteFile(f.path)
+            if (!ok) { alert('删除失败'); return }
+            editorCache.delete(f.path)
+            await refreshFiles()
+          }
+        })()
+      }
+    })
+  } else {
+    entries.push({ label: '丢弃草稿', danger: true, action: () => void deleteCurrent() })
+  }
+  return entries
+}
+
+function setupContextMenus() {
+  fileList.addEventListener('contextmenu', e => {
+    const row = (e.target as HTMLElement).closest('.file-row')
+    if (!row) return
+    const label = row.querySelector('.file-item span')?.textContent
+    const f = state.files.find(x => x.label === label) || (state.current?.scratch && state.current.label === label ? state.current : null)
+    if (!f) return
+    e.preventDefault()
+    openContextMenu(e.clientX, e.clientY, fileContextEntries(f))
+  })
+  document.addEventListener('contextmenu', e => {
+    const t = e.target as HTMLElement
+    // editor / preview context menu for the open note
+    if (!state.current) return
+    if (t.closest('.cm-editor') || t.closest('#pane-preview')) {
+      e.preventDefault()
+      openContextMenu(e.clientX, e.clientY, [
+        { label: `导出「${state.current.label}」为 HTML`, action: () => void exportHtml() },
+        { label: `导出「${state.current.label}」为 PDF`, action: () => void exportPdf() },
+        { sep: true },
+        { label: '复制全文', action: () => {
+          if (!editor) return
+          void navigator.clipboard.writeText(editor.view.state.doc.toString())
+        } }
+      ])
+    }
+  })
+}
 
 function openSearch() {
   if ($('#search-modal')) return
@@ -1315,6 +1477,7 @@ ensureEditor()
 updateStatus()
 renderPreview()
 renderOutline()
+setupContextMenus()
 void resumeLastVault()
 
 

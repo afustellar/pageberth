@@ -31,7 +31,6 @@ export function buildStandaloneHtml(title: string, markdownSrc: string): string 
   const p = palette()
   const c = (n: string, fb: string) => p[n] || fb
   const body = renderMarkdown(bodySrc)
-  const when = new Date().toLocaleString('zh-CN', { dateStyle: 'long', timeStyle: 'short' })
 
   return `<!doctype html>
 <html lang="zh-CN">
@@ -45,9 +44,8 @@ export function buildStandaloneHtml(title: string, markdownSrc: string): string 
     --panel: ${c('panel', '#F7F6F2')};
     --border: ${c('border', '#E4E2DB')};
     --fg: ${c('fg', '#2C2C2A')};
-    --muted: ${c('muted', '#8A887F')};
     --accent: ${c('accent', '#D85A30')};
-    --h: ${c('mdH', '#534AB7')};
+    --h: ${c('mdH', '#242320')};
     --strong: ${c('mdStrong', '#0F6E56')};
     --codebg: ${c('mdCodeBg', '#FAEEDA')};
     --codefg: ${c('mdCodeFg', '#633806')};
@@ -63,14 +61,6 @@ export function buildStandaloneHtml(title: string, markdownSrc: string): string 
     line-height: 1.75;
   }
   main { max-width: 760px; margin: 0 auto; padding: 48px 24px 80px; }
-  header {
-    border-bottom: 1px solid var(--border);
-    padding-bottom: 12px;
-    margin-bottom: 32px;
-    color: var(--muted);
-    font-size: 13px;
-  }
-  header h1 { color: var(--fg); font-size: 24px; margin: 0 0 4px; }
   h1, h2, h3, h4, h5, h6 { color: var(--h); line-height: 1.4; }
   h1 { font-size: 26px; } h2 { font-size: 21px; } h3 { font-size: 17px; }
   a { color: var(--link); }
@@ -90,17 +80,11 @@ export function buildStandaloneHtml(title: string, markdownSrc: string): string 
   table { border-collapse: collapse; }
   th, td { border: 1px solid var(--border); padding: 5px 10px; }
   img { max-width: 100%; }
-  footer { margin-top: 56px; color: var(--muted); font-size: 12px; text-align: center; }
 </style>
 </head>
 <body>
 <main>
-  <header>
-    <h1>${escapeHtml(title)}</h1>
-    <div>由 Inkwell 导出 · ${escapeHtml(when)}</div>
-  </header>
   ${body}
-  <footer>Inkwell · 本地优先的 Markdown 写作间</footer>
 </main>
 </body>
 </html>`

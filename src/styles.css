@@ -885,3 +885,32 @@ button:focus-visible, input:focus-visible {
 
 /* daily words counter */
 #st-daily { color: var(--ink-accent); font-variant-numeric: tabular-nums; }
+
+/* ---------- Context menu ---------- */
+
+.ctx-menu {
+  position: fixed;
+  z-index: 200;
+  min-width: 160px;
+  background: var(--ink-panel);
+  border: 1px solid var(--ink-border);
+  border-radius: 10px;
+  padding: 4px;
+  box-shadow: 0 10px 32px color-mix(in srgb, #000 30%, transparent);
+}
+
+.ctx-item {
+  display: block;
+  width: 100%;
+  padding: 6px 12px;
+  border-radius: 7px;
+  font-size: 13px;
+  text-align: left;
+  color: var(--ink-fg);
+}
+
+.ctx-item:hover { background: var(--ink-active); }
+.ctx-item.danger { color: #C4402E; }
+.ctx-item.danger:hover { background: color-mix(in srgb, #C4402E 12%, transparent); }
+
+.ctx-sep { height: 1px; background: var(--ink-border); margin: 4px 6px; }
