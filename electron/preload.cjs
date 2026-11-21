@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('inkwell', {
   listTrash: (vault) => ipcRenderer.invoke('ink:listTrash', vault),
   restoreTrash: (vault, name) => ipcRenderer.invoke('ink:restoreTrash', vault, name),
   emptyTrash: (vault) => ipcRenderer.invoke('ink:emptyTrash', vault),
+  getLastUpdate: () => ipcRenderer.invoke('ink:getLastUpdate'),
   checkUpdate: () => ipcRenderer.invoke('ink:checkUpdate'),
   downloadUpdate: () => ipcRenderer.invoke('ink:downloadUpdate'),
   installUpdate: () => ipcRenderer.send('ink:installUpdate'),

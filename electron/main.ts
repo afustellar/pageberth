@@ -4,6 +4,7 @@ import * as fs from 'fs'
 import * as path from 'path'
 
 let win: BrowserWindow | null = null
+let lastVersion: string | null = null
 
 function createWindow() {
   const useFrameless = process.platform === 'win32'
@@ -91,10 +92,14 @@ ipcMain.on('ink:winControl', (_e, action: string) => {
 ipcMain.handle('ink:isMaximized', () => (win ? win.isMaximized() : false))
 ipcMain.handle('ink:checkUpdate', async () => {
   if (!app.isPackaged) return { dev: true }
+  const current = app.getVersion()
   try {
     const r = await autoUpdater.checkForUpdates()
-    return { version: r?.updateInfo.version || null, current: app.getVersion() }
-  } catch { return { error: 'network' } }
+    const v = r?.updateInfo.version || null
+    return { version: v && v !== current ? v : null, current, downloaded: !!lastVersion }
+  } catch {
+    return { version: lastVersion || null, current, downloaded: !!lastVersion, error: 'network' }
+  }
 })
 ipcMain.handle('ink:downloadUpdate', async () => {
   try { await autoUpdater.downloadUpdate(); return true } catch { return false }

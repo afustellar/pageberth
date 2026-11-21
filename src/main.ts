@@ -1098,8 +1098,21 @@ function openSettings() {
         updBtn.disabled = false
         updBtn.onclick = () => api.installUpdate?.()
       })
-      // safety net: if download finished before listener attached
-      setTimeout(() => { if (updBtn.disabled) { updBtn.textContent = t('restartInstall'); updBtn.disabled = false; updBtn.onclick = () => api.installUpdate?.() } }, 12000)
+      // already downloaded from the startup check → offer restart right away
+      if (r.downloaded) {
+        updState.textContent = t('curVersion', { v: 'v' + r.current }) + ' → v' + r.version
+        updBtn.textContent = t('restartInstall')
+        updBtn.disabled = false
+        updBtn.onclick = () => api.installUpdate?.()
+        return
+      }
+    } else if (!r.version && r.downloaded) {
+      // startup check already fetched an update the UI missed
+      updState.textContent = t('curVersion', { v: 'v' + r.current }) + ' → ' + r.downloaded
+      updBtn.textContent = t('restartInstall')
+      updBtn.disabled = false
+      updBtn.onclick = () => api.installUpdate?.()
+      return
     } else {
       updState.textContent = t('latest')
       updBtn.textContent = t('checkUpdate')
