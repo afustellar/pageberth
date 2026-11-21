@@ -371,7 +371,7 @@ input {
   background: var(--ink-panel);
   border: 1px solid var(--ink-border);
   border-radius: 12px;
-  box-shadow: 0 18px 50px color-mix(in srgb, #000 35%, transparent);
+  box-shadow: 0 2px 4px color-mix(in srgb, #000 8%, transparent), 0 20px 48px color-mix(in srgb, #000 24%, transparent);
   overflow: hidden;
 }
 
@@ -517,7 +517,7 @@ input {
   background: var(--ink-panel);
   border: 1px solid var(--ink-border);
   border-radius: 12px;
-  box-shadow: 0 18px 50px color-mix(in srgb, #000 35%, transparent);
+  box-shadow: 0 2px 4px color-mix(in srgb, #000 8%, transparent), 0 20px 48px color-mix(in srgb, #000 24%, transparent);
   overflow: hidden;
 }
 
@@ -896,7 +896,7 @@ button:focus-visible, input:focus-visible {
   border: 1px solid var(--ink-border);
   border-radius: 10px;
   padding: 4px;
-  box-shadow: 0 10px 32px color-mix(in srgb, #000 30%, transparent);
+  box-shadow: 0 1px 3px color-mix(in srgb, #000 8%, transparent), 0 10px 24px color-mix(in srgb, #000 18%, transparent);
 }
 
 .ctx-item {
@@ -923,7 +923,7 @@ button:focus-visible, input:focus-visible {
 
 /* ---------- Compact settings: two-column groups + swatch-only pickers ---------- */
 
-.set-cols { display: flex; gap: 24px; padding: 6px 16px 0; }
+.set-cols { display: flex; gap: 24px; padding: 8px 16px 0; }
 .set-cols .set-group { flex: 1; min-width: 0; }
 .set-cols + .set-cols { margin-top: 16px; }
 
@@ -931,10 +931,10 @@ button:focus-visible, input:focus-visible {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 7px;
-  margin: 0 4px 0 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+  margin: 0 8px 8px 0;
 }
 
 .sw-pick .sw {
@@ -951,6 +951,6 @@ button:focus-visible, input:focus-visible {
 
 /* denser settings modal (Refactoring-UI: related controls share a group, tighter rhythm) */
 .settings-modal .set-group + .set-group { margin-top: 0; }
-.set-cols + .set-cols { margin-top: 14px; }
-.set-cols .set-label { margin-bottom: 6px; }
+.set-cols + .set-cols { margin-top: 16px; }
+.set-cols .set-label { margin-bottom: 8px; }
 .settings-modal { padding-bottom: 16px; }
