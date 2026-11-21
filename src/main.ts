@@ -2,7 +2,7 @@
    Architecture rule: all platform access goes through `api` (src/api.ts). */
 
 import './styles.css'
-import { applyTheme, applyHeadingColor, applyAccent, loadTheme, loadHeadingColor, loadAccent, ACCENTS, type ThemeName, type HeadingColor, type AccentId } from './theme'
+import { applyTheme, applyAccent, loadTheme, loadAccent, ACCENTS, type ThemeName, type AccentId } from './theme'
 import { createEditor, type EditorHandle } from './editor'
 import { renderMarkdown } from './markdown'
 import { makeTypewriter } from './typewriter'
@@ -54,7 +54,6 @@ const state = {
   view: (localStorage.getItem('inkwell:view') as ViewMode) || 'split',
   typewriter: false,
   theme: 'light' as ThemeName,
-  heading: 'ink' as HeadingColor,
   accent: 'coral' as AccentId,
   fontIdx: 0,
   lineIdx: 1,
@@ -840,7 +839,7 @@ function setThemeMode(mode: 'light' | 'dark' | 'auto') {
     themeMedia.onchange = () => {
       if ((localStorage.getItem('inkwell:themeMode') || 'auto') !== 'auto') return
       state.theme = systemPrefersDark() ? 'dark' : 'light'
-      applyTheme(state.theme, state.heading)
+      applyTheme(state.theme)
   applyAccent(state.accent, state.theme)
       applyThemeUI()
     }
@@ -849,7 +848,7 @@ function setThemeMode(mode: 'light' | 'dark' | 'auto') {
     themeMedia = null
     state.theme = mode
   }
-  applyTheme(state.theme, state.heading)
+  applyTheme(state.theme)
   applyAccent(state.accent, state.theme)
   applyThemeUI()
 }
@@ -869,12 +868,6 @@ function setAccent(id: AccentId) {
   applyThemeUI()
 }
 
-function setHeadingColor(c: HeadingColor) {
-  state.heading = c
-  try { localStorage.setItem('inkwell:headingColor', c) } catch { /* ignore */ }
-  applyHeadingColor(c, state.theme)
-  renderPreview()
-}
 
 /* ---------- Typography settings (font size / line height) ---------- */
 
@@ -933,10 +926,6 @@ function openSettings() {
           <div class="set-label">主题色</div>
           <div class="set-list" id="accent-list"></div>
         </div>
-        <div class="set-group">
-          <div class="set-label">标题颜色</div>
-          <div class="set-list" id="heading-list"></div>
-        </div>
       </div>
       <div class="set-cols">
         <div class="set-group">
@@ -966,24 +955,6 @@ function openSettings() {
     if (state.accent === id) b.classList.add('cur')
     b.onclick = () => { setAccent(id as AccentId); openSettings() /* reopen to refresh state */; wrap.remove() }
     accentList.appendChild(b)
-  }
-  // heading colors: swatch-only too
-  const HEADINGS_SW: [string, string, string][] = [
-    ['ink', '墨黑', '#242320'],
-    ['violet', '紫罗兰', '#534AB7'],
-    ['coral', '珊瑚', '#B4451F']
-  ]
-  const headingList = wrap.querySelector('#heading-list') as HTMLElement
-  for (const [id, name, color] of HEADINGS_SW) {
-    const b = document.createElement('button')
-    b.className = 'sw-pick' + (state.heading === id ? ' on' : '')
-    b.title = name
-    const sw = document.createElement('span')
-    sw.className = 'sw'
-    sw.style.background = color
-    b.appendChild(sw)
-    b.onclick = () => { setHeadingColor(id as HeadingColor); openSettings(); wrap.remove() }
-    headingList.appendChild(b)
   }
   wrap.querySelectorAll<HTMLButtonElement>('.set-seg button').forEach(b => {
     b.addEventListener('click', () => {
@@ -1497,12 +1468,11 @@ window.addEventListener('beforeunload', () => {
 /* ---------- Boot ---------- */
 
 state.theme = loadTheme()
-state.heading = loadHeadingColor()
 state.accent = loadAccent()
 const typo = loadTypography()
 state.fontIdx = typo.fontIdx
 state.lineIdx = typo.lineIdx
-applyTheme(state.theme, state.heading)
+applyTheme(state.theme)
   applyAccent(state.accent, state.theme)
 applyTypography()
 applyThemeUI()

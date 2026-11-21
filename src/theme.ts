@@ -1,12 +1,6 @@
 const KEY = 'theme'
-const ACCENT_KEY = 'headingColor'
 
-/* Heading color options: 'ink' (near-black, default) | 'violet' (original mockup) | 'coral' (accent) */
-const HEADINGS: Record<string, { light: string; dark: string }> = {
-  ink: { light: '#242320', dark: '#F2F0EC' },
-  violet: { light: '#534AB7', dark: '#AFA9EC' },
-  coral: { light: '#B4451F', dark: '#F0997B' }
-}
+export type ThemeName = 'light' | 'dark'
 
 /* ---------- Accent themes: swap the warm coral for other hues ---------- */
 
@@ -48,7 +42,7 @@ export type AccentId = keyof typeof ACCENTS
 
 export function loadAccent(): AccentId {
   let v: string | null = null
-  try { v = localStorage.getItem('inkwell:accent') } catch { }
+  try { v = localStorage.getItem('inkwell:accent') } catch { /* ignore */ }
   return v && v in ACCENTS ? (v as AccentId) : 'coral'
 }
 
@@ -57,15 +51,7 @@ export function applyAccent(id: AccentId, mode: ThemeName) {
   const t = mode === 'dark' ? a.dark : a.light
   const root = document.documentElement
   for (const [k, v] of Object.entries(t)) root.style.setProperty('--ink-' + k, v)
-  try { localStorage.setItem('inkwell:accent', id) } catch { }
-}
-
-export type HeadingColor = keyof typeof HEADINGS
-
-export function loadHeadingColor(): HeadingColor {
-  let v: string | null = null
-  try { v = localStorage.getItem('inkwell:' + ACCENT_KEY) } catch { /* ignore */ }
-  return v && v in HEADINGS ? (v as HeadingColor) : 'ink'
+  try { localStorage.setItem('inkwell:accent', id) } catch { /* ignore */ }
 }
 
 const light: Record<string, string> = {
@@ -106,20 +92,12 @@ const dark: Record<string, string> = {
   mdQuote: '#B4B2A9'
 }
 
-export type ThemeName = 'light' | 'dark'
-
-export function applyHeadingColor(color: HeadingColor, name: ThemeName) {
-  const h = HEADINGS[color] || HEADINGS.ink
-  document.documentElement.style.setProperty('--ink-mdH', name === 'dark' ? h.dark : h.light)
-}
-
-export function applyTheme(name: ThemeName, heading?: HeadingColor) {
+export function applyTheme(name: ThemeName) {
   const t = name === 'dark' ? dark : light
   const root = document.documentElement
   for (const [k, v] of Object.entries(t)) {
     root.style.setProperty(`--ink-${k}`, v)
   }
-  applyHeadingColor(heading || loadHeadingColor(), name)
   root.dataset.theme = name
   try { localStorage.setItem('inkwell:' + KEY, name) } catch { /* ignore */ }
 }
