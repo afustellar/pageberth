@@ -702,14 +702,13 @@ input {
 }
 
 .win-btn {
-  width: 32px;
-  height: 24px;
+  width: 30px;
+  height: 28px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   color: var(--ink-muted);
   border-radius: 6px;
-  margin-right: 2px;
 }
 
 .win-btn:hover { background: var(--ink-active); color: var(--ink-fg); }

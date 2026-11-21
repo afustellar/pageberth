@@ -131,7 +131,7 @@ const webApi: InkwellApi = {
   async restoreTrash(vault: string, name: string) {
     const raw = lsGet('trash/' + name)
     if (!raw) return { ok: false, error: '不存在' }
-    const orig = name.replace(/^d{4}-d{2}-d{2}T[d-]+-/, '')
+    const orig = name.replace(/^\d{4}-\d{2}-\d{2}T[\d-]+-/, '')
     lsSet('vault:' + vault + '/files/' + orig, raw)
     try { localStorage.removeItem('inkwell:trash/' + name) } catch { }
     return { ok: true, path: 'vault:' + vault + '/files/' + orig }
