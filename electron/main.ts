@@ -1,4 +1,5 @@
 ﻿import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import { autoUpdater } from 'electron-updater'
 import * as fs from 'fs'
 import * as path from 'path'
 
@@ -40,9 +41,42 @@ function createWindow() {
     shell.openExternal(url)
     return { action: 'deny' }
   })
+  // Windows "open with" passes the file path as argv[1] (packaged) / argv[1:] (dev)
+  const argFile = process.argv.find(a => /\.(md|markdown|txt)$/i.test(a))
+  if (argFile) {
+    win.webContents.on('did-finish-load', () => {
+      win?.webContents.executeJavaScript('window.__inkOpenFile = true')
+      win?.webContents.send('ink:open-file', argFile)
+    })
+  }
 }
 
-app.whenReady().then(createWindow)
+const gotLock = app.requestSingleInstanceLock()
+if (!gotLock) {
+  app.quit()
+} else {
+  app.on('second-instance', (_e, argv) => {
+    if (win) {
+      win.restore()
+      const f = argv.find(a => /\.(md|markdown|txt)$/i.test(a))
+      if (f) win.webContents.send('ink:open-file', f)
+    }
+  })
+  app.whenReady().then(() => {
+  createWindow()
+  // auto-update: only meaningful in packaged builds
+  if (app.isPackaged) {
+    autoUpdater.autoDownload = false
+    autoUpdater.checkForUpdates().catch(() => {})
+    autoUpdater.on('update-available', (info) => {
+      win?.webContents.send('ink:update', info.version)
+    })
+    autoUpdater.on('update-downloaded', () => {
+      win?.webContents.send('ink:update-ready')
+    })
+  }
+})
+}
 app.on('window-all-closed', () => app.quit())
 
 ipcMain.on('ink:winControl', (_e, action: string) => {
@@ -52,6 +86,17 @@ ipcMain.on('ink:winControl', (_e, action: string) => {
   else if (action === 'close') win.close()
 })
 ipcMain.handle('ink:isMaximized', () => (win ? win.isMaximized() : false))
+ipcMain.handle('ink:checkUpdate', async () => {
+  if (!app.isPackaged) return { dev: true }
+  try {
+    const r = await autoUpdater.checkForUpdates()
+    return { version: r?.updateInfo.version || null }
+  } catch { return { error: 'network' } }
+})
+ipcMain.handle('ink:downloadUpdate', async () => {
+  try { await autoUpdater.downloadUpdate(); return true } catch { return false }
+})
+ipcMain.on('ink:installUpdate', () => autoUpdater.quitAndInstall())
 
 ipcMain.handle('ink:pickFolder', async () => {
   if (!win) return null

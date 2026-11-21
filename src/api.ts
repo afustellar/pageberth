@@ -14,6 +14,12 @@ export interface InkwellApi {
   listTrash?(vault: string): Promise<string[]>
   restoreTrash?(vault: string, name: string): Promise<{ ok: boolean; path?: string; error?: string }>
   emptyTrash?(vault: string): Promise<boolean>
+  checkUpdate?(): Promise<{ version?: string | null; dev?: boolean; error?: string }>
+  downloadUpdate?(): Promise<boolean>
+  installUpdate?(): void
+  onUpdate?(cb: (version: string) => void): void
+  onUpdateReady?(cb: () => void): void
+  onOpenFile?(cb: (path: string) => void): void
   winControl?(action: 'minimize' | 'maximize' | 'close'): void
   isMaximized?(): Promise<boolean>
 }

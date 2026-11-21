@@ -13,6 +13,7 @@ import { layoutGraph } from './graph'
 import { buildStandaloneHtml } from './export'
 import { EditorView } from '@codemirror/view'
 import { api } from './api'
+import { t, getLang, setLang, LANGS, type Lang } from './i18n'
 
 type ViewMode = 'edit' | 'split' | 'preview'
 
@@ -117,7 +118,7 @@ root.innerHTML = `
       </aside>
       <div class="welcome" id="welcome">
         <h2>Inkwell</h2>
-        <p>你的笔记，只属于这台电脑</p>
+        <p>安静写作，笔记留在本机</p>
         <div class="row">
           <button id="new-note-btn">新建笔记</button>
           <button id="open-vault-btn" class="ghost">打开文件夹</button>
@@ -987,6 +988,17 @@ function openSettings() {
           <div class="set-list" id="accent-list"></div>
         </div>
       </div>
+      <div class="set-group" id="lang-group">
+        <div class="set-label">${t('langLabel')}</div>
+        <div class="set-list" id="lang-list"></div>
+      </div>
+      <div class="set-group" id="update-group">
+        <div class="set-label">${t('update')}</div>
+        <div class="update-row">
+          <span class="update-state" id="update-state"></span>
+          <button class="ghost-btn" id="update-btn">${t('checkUpdate')}</button>
+        </div>
+      </div>
       <div class="set-cols">
         <div class="set-group">
           <div class="set-label">字号</div>
@@ -1027,6 +1039,45 @@ function openSettings() {
       })
     })
   })
+  // updater row
+  const updState = $('#update-state') as HTMLElement
+  const updBtn = $('#update-btn') as HTMLButtonElement
+  updBtn.addEventListener('click', async () => {
+    if (!api.checkUpdate) return
+    updBtn.disabled = true
+    updBtn.textContent = '…'
+    const r = await api.checkUpdate()
+    if (r.dev) { updState.textContent = t('devMode') }
+    else if (r.version) {
+      updState.textContent = `v${r.version}`
+      updBtn.textContent = t('downloading')
+      updBtn.disabled = false
+      updBtn.onclick = async () => {
+        updBtn.disabled = true
+        await api.downloadUpdate?.()
+        updState.textContent = t('dlDone')
+        updBtn.textContent = t('restartInstall')
+        updBtn.disabled = false
+        updBtn.onclick = () => api.installUpdate?.()
+      }
+    } else {
+      updState.textContent = r.error ? t('checkFail') : t('latest')
+      updBtn.textContent = t('checkUpdate')
+      updBtn.disabled = false
+    }
+  })
+  // language row
+  const langRow = $('#lang-list') as HTMLElement
+  if (langRow) {
+    for (const l of LANGS) {
+      const b = document.createElement('button')
+      b.className = 'sw-pick lang-pick' + (getLang() === l.id ? ' on' : '')
+      b.textContent = l.label
+      if (getLang() === l.id) b.classList.add('cur')
+      b.onclick = () => { setLang(l.id as Lang); openSettings(); wrap.remove() }
+      langRow.appendChild(b)
+    }
+  }
 }
 
 function closeSettings() {
@@ -1559,6 +1610,36 @@ updateStatus()
 renderPreview()
 renderOutline()
 setupContextMenus()
+setupContextMenus()
+
+// handle "open with" from OS
+if (api.onOpenFile) {
+  api.onOpenFile(async p => {
+    const dir = p.replace(/[\/][^\/]+$/, '')
+    const name = p.split(/[\/]/).pop()!
+    // treat file's folder as vault
+    state.vault = dir
+    try { localStorage.setItem('inkwell:lastVault', dir) } catch { }
+    vaultBtn.textContent = api.isElectron ? dir.split(/[\/]/).pop() || dir : dir
+    vaultBtn.title = dir
+    welcomeEl.style.display = 'none'
+    await refreshFiles()
+    const hit = state.files.find(f => f.name === name)
+    if (hit) await openFile(hit)
+    else {
+      // file not in listing (e.g. different ext casing): read directly
+      const content = (await api.readFile(p)) ?? ''
+      ensureEditor().view.dispatch({ changes: { from: 0, to: editor!.view.state.doc.length, insert: content } })
+      state.current = { path: p, name, label: labelOf(name) }
+      applyView()
+      setSaveState('clean')
+      updateStatus()
+      renderPreview()
+      renderOutline()
+    }
+  })
+}
+
 void resumeLastVault()
 
 
