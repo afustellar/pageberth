@@ -1,12 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <!-- Inkwell v3: reads as "M"arkdown - ink-drop forms the M, pen nib below -->
+  <!-- Inkwell mark v4: tilted nib drawing an ink stroke, original composition -->
   <rect width="512" height="512" rx="112" fill="#D85A30"/>
-  <!-- rounded white card echoing a markdown badge -->
-  <rect x="64" y="128" width="384" height="256" rx="40" fill="#FFFFFF"/>
-  <!-- M drawn as two ink strokes -->
-  <path d="M120 320 v-112 l48 72 48-72 v112" fill="none" stroke="#2C2C2A" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/>
-  <!-- down-arrow of the markdown mark -->
-  <path d="M368 208 v96 m-30 -30 l30 30 30 -30" fill="none" stroke="#2C2C2A" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/>
-  <!-- coral drop accent between M and arrow -->
-  <circle cx="256" cy="256" r="16" fill="#D85A30"/>
+  <!-- the stroke the pen just drew: a rising swash -->
+  <path d="M96 380 C 180 372, 300 356, 396 288" fill="none" stroke="#FFFFFF" stroke-width="34" stroke-linecap="round"/>
+  <!-- nib: tilted kite with slit + breather hole -->
+  <g transform="rotate(-38 300 176)">
+    <path d="M300 96 L342 216 L300 248 L258 216 Z" fill="#FFFFFF"/>
+    <circle cx="300" cy="196" r="13" fill="#D85A30"/>
+    <path d="M300 209 L300 248" stroke="#D85A30" stroke-width="9" stroke-linecap="round"/>
+  </g>
+  <!-- fresh drop falling off the tip -->
+  <path d="M236 300 c 11 17, 17 26, 17 36 a 17 17 0 1 1 -34 0 c 0 -10, 6 -19, 17 -36 z" fill="#FFFFFF"/>
 </svg>

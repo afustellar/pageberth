@@ -2,7 +2,7 @@
    Architecture rule: all platform access goes through `api` (src/api.ts). */
 
 import './styles.css'
-import { applyTheme, applyHeadingColor, loadTheme, loadHeadingColor, type ThemeName, type HeadingColor } from './theme'
+import { applyTheme, applyHeadingColor, applyAccent, loadTheme, loadHeadingColor, loadAccent, ACCENTS, type ThemeName, type HeadingColor, type AccentId } from './theme'
 import { createEditor, type EditorHandle } from './editor'
 import { renderMarkdown } from './markdown'
 import { makeTypewriter } from './typewriter'
@@ -55,6 +55,7 @@ const state = {
   typewriter: false,
   theme: 'light' as ThemeName,
   heading: 'ink' as HeadingColor,
+  accent: 'coral' as AccentId,
   fontIdx: 0,
   lineIdx: 1,
   dirty: false,
@@ -72,7 +73,7 @@ root.innerHTML = `
 <div id="app-root">
   <header class="topbar">
     ${isMac ? '<div class="traffic-dots"><span class="dot-close"></span><span class="dot-min"></span><span class="dot-max"></span></div>' : ''}
-    <span class="brand"><svg viewBox="0 0 512 512" width="18" height="18" aria-hidden="true"><rect width="512" height="512" rx="112" fill="#D85A30"/><rect x="64" y="128" width="384" height="256" rx="40" fill="#FFFFFF"/><path d="M120 320 v-112 l48 72 48-72 v112" fill="none" stroke="#2C2C2A" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/><path d="M368 208 v96 m-30 -30 l30 30 30 -30" fill="none" stroke="#2C2C2A" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/><circle cx="256" cy="256" r="16" fill="#D85A30"/></svg></span>
+    <span class="brand"><svg viewBox="0 0 512 512" width="18" height="18" aria-hidden="true"><rect width="512" height="512" rx="112" fill="#D85A30"/><path d="M96 380 C 180 372, 300 356, 396 288" fill="none" stroke="#FFFFFF" stroke-width="34" stroke-linecap="round"/><g transform="rotate(-38 300 176)"><path d="M300 96 L342 216 L300 248 L258 216 Z" fill="#FFFFFF"/><circle cx="300" cy="196" r="13" fill="#D85A30"/><path d="M300 209 L300 248" stroke="#D85A30" stroke-width="9" stroke-linecap="round"/></g><path d="M236 300 c 11 17, 17 26, 17 36 a 17 17 0 1 1 -34 0 c 0 -10, 6 -19, 17 -36 z" fill="#FFFFFF"/></svg></span>
     <span class="app-title">Inkwell</span>
     <button class="vault-name" id="vault-btn" title="打开资料库文件夹">未打开资料库</button>
     <div class="seg" id="view-seg">
@@ -218,6 +219,7 @@ function ensureEditor() {
     })
   ])
   editor.view.dom.style.height = '100%'
+  ;(window as any).__inkEditor = editor.view // testability / power users
   return editor
 }
 
@@ -307,6 +309,11 @@ function renderPreview() {
 /* ---------- Open-or-create by wiki name ---------- */
 
 async function openByName(target: string) {
+  // draft note: materialize first so the wiki target lands in a real vault
+  if (state.current?.scratch) {
+    const real = await materializeScratch()
+    if (!real) return
+  }
   if (!state.vault) return
   const hit = state.files.find(f => f.label.toLowerCase() === target.toLowerCase())
   if (hit) {
@@ -826,6 +833,7 @@ function setThemeMode(mode: 'light' | 'dark' | 'auto') {
       if ((localStorage.getItem('inkwell:themeMode') || 'auto') !== 'auto') return
       state.theme = systemPrefersDark() ? 'dark' : 'light'
       applyTheme(state.theme, state.heading)
+  applyAccent(state.accent, state.theme)
       applyThemeUI()
     }
     state.theme = systemPrefersDark() ? 'dark' : 'light'
@@ -834,6 +842,7 @@ function setThemeMode(mode: 'light' | 'dark' | 'auto') {
     state.theme = mode
   }
   applyTheme(state.theme, state.heading)
+  applyAccent(state.accent, state.theme)
   applyThemeUI()
 }
 
@@ -844,6 +853,13 @@ function loadThemeMode(): 'light' | 'dark' | 'auto' {
 }
 
 /* ---------- Settings ---------- */
+
+function setAccent(id: AccentId) {
+  state.accent = id
+  try { localStorage.setItem('inkwell:accent', id) } catch { }
+  applyAccent(id, state.theme)
+  applyThemeUI()
+}
 
 function setHeadingColor(c: HeadingColor) {
   state.heading = c
@@ -911,7 +927,11 @@ function openSettings() {
         <button class="icon-btn" id="settings-close" title="关闭" aria-label="关闭">✕</button>
       </div>
       <div class="set-group">
-        <div class="set-label">主题</div>
+        <div class="set-label">主题色</div>
+        <div class="set-list" id="accent-list"></div>
+      </div>
+      <div class="set-group">
+        <div class="set-label">主题（明暗）</div>
         <div class="set-list">
           ${themeOpt('auto', '跟随系统', th === (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') && localStorage.getItem('inkwell:themeMode') === 'auto')}
           ${themeOpt('light', '浅色', th === 'light' && localStorage.getItem('inkwell:themeMode') !== 'auto')}
@@ -938,6 +958,15 @@ function openSettings() {
   wrap.addEventListener('mousedown', e => { if (e.target === wrap) closeSettings() })
   $('#palette-root').appendChild(wrap)
   $('#settings-close').addEventListener('click', closeSettings)
+  // accent list
+  const accentList = wrap.querySelector('#accent-list') as HTMLElement
+  for (const [id, a] of Object.entries(ACCENTS)) {
+    const b = document.createElement('button')
+    b.className = 'set-opt' + (state.accent === id ? ' on' : '')
+    b.innerHTML = '<span class=sw style=ackground: + a.light.accent + ></span>' + a.name + (state.accent === id ? '<span class=set-check>✓</span>' : '')
+    b.onclick = () => { setAccent(id as AccentId); closeSettings() }
+    accentList.appendChild(b)
+  }
   wrap.querySelectorAll<HTMLButtonElement>('.set-opt[data-theme]').forEach(b => {
     b.addEventListener('click', () => {
       setThemeMode(b.dataset.theme as 'light' | 'dark' | 'auto')
@@ -1464,10 +1493,12 @@ window.addEventListener('beforeunload', () => {
 
 state.theme = loadTheme()
 state.heading = loadHeadingColor()
+state.accent = loadAccent()
 const typo = loadTypography()
 state.fontIdx = typo.fontIdx
 state.lineIdx = typo.lineIdx
 applyTheme(state.theme, state.heading)
+  applyAccent(state.accent, state.theme)
 applyTypography()
 applyThemeUI()
 applyView()

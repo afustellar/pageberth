@@ -8,6 +8,58 @@ const HEADINGS: Record<string, { light: string; dark: string }> = {
   coral: { light: '#B4451F', dark: '#F0997B' }
 }
 
+/* ---------- Accent themes: swap the warm coral for other hues ---------- */
+
+export interface AccentPalette {
+  name: string
+  light: { accent: string; 'accent-ink': string }
+  dark: { accent: string; 'accent-ink': string }
+}
+
+export const ACCENTS: Record<string, AccentPalette> = {
+  coral: {
+    name: '珊瑚（默认）',
+    light: { accent: '#D85A30', 'accent-ink': '#712B13' },
+    dark: { accent: '#F0997B', 'accent-ink': '#4A1B0C' }
+  },
+  ocean: {
+    name: '墨蓝',
+    light: { accent: '#2E6E8E', 'accent-ink': '#0F3049' },
+    dark: { accent: '#7FB8D8', 'accent-ink': '#0E2A3D' }
+  },
+  forest: {
+    name: '森绿',
+    light: { accent: '#3E7D4E', 'accent-ink': '#1C3D25' },
+    dark: { accent: '#8CC99B', 'accent-ink': '#14301C' }
+  },
+  violet: {
+    name: '紫罗兰',
+    light: { accent: '#6C5CE0', 'accent-ink': '#2B2464' },
+    dark: { accent: '#A9A2F0', 'accent-ink': '#241E58' }
+  },
+  graphite: {
+    name: '石墨',
+    light: { accent: '#4A4842', 'accent-ink': '#1E1D1A' },
+    dark: { accent: '#B8B5AE', 'accent-ink': '#26241F' }
+  }
+}
+
+export type AccentId = keyof typeof ACCENTS
+
+export function loadAccent(): AccentId {
+  let v: string | null = null
+  try { v = localStorage.getItem('inkwell:accent') } catch { }
+  return v && v in ACCENTS ? (v as AccentId) : 'coral'
+}
+
+export function applyAccent(id: AccentId, mode: ThemeName) {
+  const a = ACCENTS[id] || ACCENTS.coral
+  const t = mode === 'dark' ? a.dark : a.light
+  const root = document.documentElement
+  for (const [k, v] of Object.entries(t)) root.style.setProperty('--ink-' + k, v)
+  try { localStorage.setItem('inkwell:accent', id) } catch { }
+}
+
 export type HeadingColor = keyof typeof HEADINGS
 
 export function loadHeadingColor(): HeadingColor {
