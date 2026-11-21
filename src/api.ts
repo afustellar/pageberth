@@ -1,6 +1,7 @@
 export interface InkwellApi {
   isElectron: boolean
   pickFolder(): Promise<string | null>
+  openFileDialog?(): Promise<{ path: string; content: string } | null>
   readDir(dir: string): Promise<{ files: string[]; folders: string[] } | null>
   readFile(p: string): Promise<string | null>
   writeFile(p: string, content: string): Promise<boolean>
@@ -34,6 +35,21 @@ const webApi: InkwellApi = {
     }
     lsSet('lastVault', name)
     return name
+  },
+
+  async openFileDialog() {
+    // browser fallback: plain <input type=file>
+    return new Promise(resolve => {
+      const input = document.createElement('input')
+      input.type = 'file'
+      input.accept = '.md,.markdown,.txt'
+      input.onchange = async () => {
+        const f = input.files?.[0]
+        if (!f) return resolve(null)
+        resolve({ path: `file:${f.name}`, content: await f.text() })
+      }
+      input.click()
+    })
   },
 
   async readDir(vault: string) {

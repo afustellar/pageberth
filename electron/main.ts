@@ -59,6 +59,23 @@ ipcMain.handle('ink:pickFolder', async () => {
   return r.canceled ? null : r.filePaths[0]
 })
 
+ipcMain.handle('ink:openFileDialog', async () => {
+  if (!win) return null
+  const r = await dialog.showOpenDialog(win, {
+    properties: ['openFile'],
+    filters: [{ name: 'Markdown', extensions: ['md', 'markdown', 'txt'] }]
+  })
+  if (r.canceled || !r.filePaths[0]) return null
+  const p = r.filePaths[0]
+  try {
+    const stat = fs.statSync(p)
+    if (!stat.isFile() || stat.size > 5 * 1024 * 1024) return null
+    return { path: p, content: fs.readFileSync(p, 'utf-8') }
+  } catch {
+    return null
+  }
+})
+
 ipcMain.handle('ink:readDir', (_e, dir: string) => {
   try {
     const entries = fs.readdirSync(dir, { withFileTypes: true })

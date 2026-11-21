@@ -200,13 +200,9 @@ input {
   text-overflow: ellipsis;
 }
 
-.file-item:hover { background: var(--ink-active); }
+.file-row:hover { background: var(--ink-active); }
 
-.file-item.on {
-  background: var(--ink-active);
-  color: var(--ink-accent);
-  font-weight: 600;
-}
+
 
 .sidebar-empty {
   padding: 14px 12px;
@@ -766,3 +762,76 @@ button:focus-visible, input:focus-visible {
 }
 
 .set-opt .set-check { margin-left: auto; color: var(--ink-accent); }
+
+/* ---------- File rows with hover delete ---------- */
+
+.file-row {
+  display: flex;
+  align-items: center;
+  border-radius: 6px;
+  position: relative;
+}
+
+.file-row .file-item { flex: 1; min-width: 0; }
+.file-row.on .file-item { color: var(--ink-accent); font-weight: 600; }
+.file-row.on { background: var(--ink-active); }
+
+.file-del {
+  width: 22px;
+  height: 22px;
+  margin-right: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 5px;
+  font-size: 11px;
+  color: var(--ink-muted);
+  opacity: 0;
+  flex-shrink: 0;
+  transition: opacity 0.12s ease;
+}
+
+.file-row:hover .file-del, .file-row.on .file-del { opacity: 1; }
+.file-del:hover { background: var(--ink-destructive, #C4402E); color: #fff; }
+
+/* ---------- Settings segmented control ---------- */
+
+.set-seg {
+  display: flex;
+  background: var(--ink-input);
+  border-radius: 8px;
+  padding: 2px;
+  margin-top: 2px;
+}
+
+.set-seg button {
+  flex: 1;
+  padding: 5px 0;
+  border-radius: 6px;
+  font-size: 12.5px;
+  color: var(--ink-muted);
+}
+
+.set-seg button.on {
+  background: var(--ink-bg);
+  color: var(--ink-fg);
+  font-weight: 600;
+}
+
+.set-group + .set-group { margin-top: 16px; }
+
+/* ---------- Typography variables at work ---------- */
+
+.pane-editor .cm-content {
+  font-size: var(--ink-editor-size, 13px);
+  line-height: var(--ink-editor-lh, 2);
+}
+
+.pane-preview {
+  font-size: var(--ink-preview-size, 15px);
+  line-height: var(--ink-preview-lh, 1.9);
+}
+
+.pane-preview h1 { font-size: calc(var(--ink-preview-size, 15px) * 1.75); }
+.pane-preview h2 { font-size: calc(var(--ink-preview-size, 15px) * 1.4); }
+.pane-preview h3 { font-size: calc(var(--ink-preview-size, 15px) * 1.15); }

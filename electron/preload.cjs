@@ -3,6 +3,7 @@ const { contextBridge, ipcRenderer } = require('electron')
 contextBridge.exposeInMainWorld('inkwell', {
   isElectron: true,
   pickFolder: () => ipcRenderer.invoke('ink:pickFolder'),
+  openFileDialog: () => ipcRenderer.invoke('ink:openFileDialog'),
   readDir: (dir) => ipcRenderer.invoke('ink:readDir', dir),
   readFile: (p) => ipcRenderer.invoke('ink:readFile', p),
   writeFile: (p, content) => ipcRenderer.invoke('ink:writeFile', p, content),

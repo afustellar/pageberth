@@ -53,6 +53,8 @@ const state = {
   typewriter: false,
   theme: 'light' as ThemeName,
   heading: 'ink' as HeadingColor,
+  fontIdx: 0,
+  lineIdx: 1,
   dirty: false,
   saveTimer: 0 as unknown as ReturnType<typeof setTimeout>
 }
@@ -113,8 +115,9 @@ root.innerHTML = `
         <h2>Inkwell</h2>
         <p>本地优先的 Markdown 写作间</p>
         <div class="row">
-          <button id="open-vault-btn">打开文件夹</button>
           <button id="new-note-btn">新建笔记</button>
+          <button id="open-vault-btn">打开文件夹</button>
+          <button id="open-file-btn">打开单个文件</button>
         </div>
         <p class="hint">按 <kbd>${MOD}</kbd>+<kbd>K</kbd> 打开命令面板</p>
       </div>
@@ -309,8 +312,10 @@ function renderFileList() {
     return
   }
   for (const f of shown) {
+    const row = document.createElement('div')
+    row.className = 'file-row' + (state.current?.path === f.path ? ' on' : '')
     const b = document.createElement('button')
-    b.className = 'file-item' + (state.current?.path === f.path ? ' on' : '')
+    b.className = 'file-item'
     const span = document.createElement('span')
     span.textContent = f.label
     b.appendChild(span)
@@ -322,7 +327,35 @@ function renderFileList() {
     }
     b.title = f.name
     b.onclick = () => { if (state.current?.path !== f.path) void openFile(f) }
-    fileList.appendChild(b)
+    row.appendChild(b)
+    const del = document.createElement('button')
+    del.className = 'file-del'
+    del.setAttribute('aria-label', `删除 ${f.label}`)
+    del.title = '删除'
+    del.textContent = '✕'
+    del.onclick = async e => {
+      e.stopPropagation()
+      if (f.scratch) {
+        if (state.current?.path === f.path) await deleteCurrent()
+        else { state.files = state.files; /* unreachable: scratch is always current */ }
+        return
+      }
+      if (!confirm(`删除「${f.name}」？此操作不可撤销。`)) return
+      const wasCurrent = state.current?.path === f.path
+      const ok = await api.deleteFile(f.path)
+      if (!ok) { alert('删除失败'); return }
+      editorCache.delete(f.path)
+      if (wasCurrent) {
+        state.current = null
+        editor?.view.dispatch({ changes: { from: 0, to: editor.view.state.doc.length, insert: '' } })
+        applyView()
+        updateStatus()
+        renderPreview()
+      }
+      await refreshFiles()
+    }
+    row.appendChild(del)
+    fileList.appendChild(row)
   }
 }
 
@@ -504,6 +537,27 @@ async function pickVault(): Promise<boolean> {
   return true
 }
 
+/* ---------- Open a single loose file ---------- */
+
+async function openLooseFile() {
+  if (!api.openFileDialog) return
+  const r = await api.openFileDialog()
+  if (!r) return
+  if (state.current && state.dirty) await saveCurrent()
+  ensureEditor().view.dispatch({
+    changes: { from: 0, to: editor!.view.state.doc.length, insert: r.content }
+  })
+  const label = r.path.split(/[\\/]/).pop()?.replace(/\.(md|markdown|txt)$/i, '') || '文件'
+  state.current = { path: r.path, name: r.path.split(/[\\/]/).pop() || label, label, scratch: true }
+  applyView()
+  renderFileList()
+  setSaveState('dirty')
+  updateStatus()
+  renderPreview()
+  renderOutline()
+  editor!.view.focus()
+}
+
 /* ---------- Resume last vault ---------- */
 
 async function resumeLastVault(): Promise<boolean> {
@@ -601,6 +655,45 @@ function setHeadingColor(c: HeadingColor) {
   renderPreview()
 }
 
+/* ---------- Typography settings (font size / line height) ---------- */
+
+const FONT_STEPS = [13, 15, 17]   // px
+const LINE_STEPS = [1.7, 2.0, 2.4] // multiplier
+
+function loadTypography(): { fontIdx: number; lineIdx: number } {
+  let f = 0, l = 1
+  try {
+    const fsRaw = localStorage.getItem('inkwell:fontIdx')
+    const lhRaw = localStorage.getItem('inkwell:lineIdx')
+    if (fsRaw !== null && FONT_STEPS[Number(fsRaw)] !== undefined) f = Number(fsRaw)
+    if (lhRaw !== null && LINE_STEPS[Number(lhRaw)] !== undefined) l = Number(lhRaw)
+  } catch { /* ignore */ }
+  return { fontIdx: f, lineIdx: l }
+}
+
+function applyTypography() {
+  const size = FONT_STEPS[state.fontIdx]
+  const lh = LINE_STEPS[state.lineIdx]
+  const root = document.documentElement
+  root.style.setProperty('--ink-editor-size', size + 'px')
+  root.style.setProperty('--ink-editor-lh', String(lh))
+  // preview scales slightly larger than the editor
+  root.style.setProperty('--ink-preview-size', size + 2 + 'px')
+  root.style.setProperty('--ink-preview-lh', String(Math.max(1.6, lh - 0.1)))
+}
+
+function setFontIdx(i: number) {
+  state.fontIdx = Math.max(0, Math.min(FONT_STEPS.length - 1, i))
+  try { localStorage.setItem('inkwell:fontIdx', String(state.fontIdx)) } catch { /* ignore */ }
+  applyTypography()
+}
+
+function setLineIdx(i: number) {
+  state.lineIdx = Math.max(0, Math.min(LINE_STEPS.length - 1, i))
+  try { localStorage.setItem('inkwell:lineIdx', String(state.lineIdx)) } catch { /* ignore */ }
+  applyTypography()
+}
+
 function openSettings() {
   if ($('#settings-modal')) return
   const wrap = document.createElement('div')
@@ -608,6 +701,8 @@ function openSettings() {
   wrap.className = 'modal-overlay'
   const opt = (id: string, label: string, swatch: string, cur: boolean) =>
     `<button class="set-opt${cur ? ' on' : ''}" data-hc="${id}"><span class="sw" style="background:${swatch}"></span>${label}${cur ? '<span class="set-check">✓</span>' : ''}</button>`
+  const seg = (group: string, idx: number, labels: string[]) =>
+    `<div class="set-seg" data-group="${group}">${labels.map((t, i) => `<button data-i="${i}" class="${i === idx ? 'on' : ''}">${t}</button>`).join('')}</div>`
   const hc = state.heading
   wrap.innerHTML = `
     <div class="modal settings-modal">
@@ -623,6 +718,14 @@ function openSettings() {
           ${opt('coral', '珊瑚', '#B4451F', hc === 'coral')}
         </div>
       </div>
+      <div class="set-group">
+        <div class="set-label">字号</div>
+        ${seg('font', state.fontIdx, ['小', '中', '大'])}
+      </div>
+      <div class="set-group">
+        <div class="set-label">行距</div>
+        ${seg('line', state.lineIdx, ['紧凑', '适中', '宽松'])}
+      </div>
     </div>`
   wrap.addEventListener('mousedown', e => { if (e.target === wrap) closeSettings() })
   $('#palette-root').appendChild(wrap)
@@ -631,6 +734,18 @@ function openSettings() {
     b.addEventListener('click', () => {
       setHeadingColor(b.dataset.hc as HeadingColor)
       closeSettings()
+    })
+  })
+  wrap.querySelectorAll<HTMLButtonElement>('.set-seg button').forEach(b => {
+    b.addEventListener('click', () => {
+      const group = (b.closest('.set-seg') as HTMLElement).dataset.group
+      const i = Number(b.dataset.i)
+      if (group === 'font') setFontIdx(i)
+      else setLineIdx(i)
+      // refresh active state
+      wrap.querySelectorAll<HTMLButtonElement>(`.set-seg[data-group="${group}"] button`).forEach(x => {
+        x.classList.toggle('on', Number(x.dataset.i) === i)
+      })
     })
   })
 }
@@ -834,6 +949,7 @@ $('#cmdk-btn').addEventListener('click', openPalette)
 $('#new-btn').addEventListener('click', newNote)
 vaultBtn.addEventListener('click', pickVault)
 $('#open-vault-btn').addEventListener('click', pickVault)
+$('#open-file-btn').addEventListener('click', () => void openLooseFile())
 $('#new-note-btn').addEventListener('click', newNote)
 filterInput.addEventListener('input', renderFileList)
 
@@ -877,7 +993,11 @@ window.addEventListener('beforeunload', () => {
 
 state.theme = loadTheme()
 state.heading = loadHeadingColor()
+const typo = loadTypography()
+state.fontIdx = typo.fontIdx
+state.lineIdx = typo.lineIdx
 applyTheme(state.theme, state.heading)
+applyTypography()
 applyThemeUI()
 applyView()
 applyOutline()
