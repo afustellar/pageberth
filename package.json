@@ -74,6 +74,9 @@
         "AppImage",
         "deb"
       ]
+    },
+    "mac": {
+      "icon": "build/icon.png"
     }
   },
   "allowScripts": {}
