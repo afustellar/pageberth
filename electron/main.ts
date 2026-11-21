@@ -66,7 +66,7 @@ if (!gotLock) {
   createWindow()
   // auto-update: only meaningful in packaged builds
   if (app.isPackaged) {
-    autoUpdater.autoDownload = false
+    autoUpdater.autoDownload = true
     autoUpdater.checkForUpdates().catch(() => {})
     autoUpdater.on('update-available', (info) => {
       win?.webContents.send('ink:update', info.version)
@@ -90,7 +90,7 @@ ipcMain.handle('ink:checkUpdate', async () => {
   if (!app.isPackaged) return { dev: true }
   try {
     const r = await autoUpdater.checkForUpdates()
-    return { version: r?.updateInfo.version || null }
+    return { version: r?.updateInfo.version || null, current: app.getVersion() }
   } catch { return { error: 'network' } }
 })
 ipcMain.handle('ink:downloadUpdate', async () => {

@@ -14,7 +14,7 @@ export interface InkwellApi {
   listTrash?(vault: string): Promise<string[]>
   restoreTrash?(vault: string, name: string): Promise<{ ok: boolean; path?: string; error?: string }>
   emptyTrash?(vault: string): Promise<boolean>
-  checkUpdate?(): Promise<{ version?: string | null; dev?: boolean; error?: string }>
+  checkUpdate?(): Promise<{ version?: string | null; current?: string; dev?: boolean; error?: string }>
   downloadUpdate?(): Promise<boolean>
   installUpdate?(): void
   onUpdate?(cb: (version: string) => void): void

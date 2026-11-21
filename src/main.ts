@@ -75,18 +75,18 @@ root.innerHTML = `
     ${isMac ? '<div class="traffic-dots"><span class="dot-close"></span><span class="dot-min"></span><span class="dot-max"></span></div>' : ''}
     <span class="brand"><svg viewBox="0 0 512 512" width="18" height="18" aria-hidden="true"><rect width="512" height="512" rx="112" fill="#FFFFFF"/><rect x="16" y="16" width="480" height="480" rx="96" fill="none" stroke="#E4E2DB" stroke-width="8"/><path d="M96 380 C 180 372, 300 356, 396 288" fill="none" stroke="#2C2C2A" stroke-width="34" stroke-linecap="round"/><g transform="rotate(-38 300 176)"><path d="M300 96 L342 216 L300 248 L258 216 Z" fill="#2C2C2A"/><circle cx="300" cy="196" r="13" fill="#FFFFFF"/><path d="M300 209 L300 248" stroke="#FFFFFF" stroke-width="9" stroke-linecap="round"/></g><path d="M236 300 c 11 17, 17 26, 17 36 a 17 17 0 1 1 -34 0 c 0 -10, 6 -19, 17 -36 z" fill="#D85A30"/></svg></span>
     <span class="app-title">Inkwell</span>
-    <button class="vault-name" id="vault-btn" title="打开资料库文件夹">未打开资料库</button>
+    <button class="vault-name" id="vault-btn" title="${t('openVaultTitle')}">${t('vault')}</button>
     <div class="seg" id="view-seg">
-      <button data-view="edit">编辑</button>
-      <button data-view="split">分屏</button>
-      <button data-view="preview">预览</button>
+      <button data-view="edit">${t('edit')}</button>
+      <button data-view="split">${t('split')}</button>
+      <button data-view="preview">${t('preview')}</button>
     </div>
     <div class="top-actions">
-      <button class="icon-btn" id="outline-btn" title="大纲面板" aria-label="大纲面板">${I('outline', '大纲面板')}</button>
-      <button class="icon-btn" id="tw-btn" title="打字机专注模式 (${MOD}+J)" aria-label="打字机专注模式">${I('typewriter', '打字机专注模式')}</button>
-      <button class="icon-btn" id="cmdk-btn" title="命令面板 (${MOD}+K)" aria-label="命令面板">${I('palette', '命令面板')}</button>
-      <button class="icon-btn" id="theme-btn" title="切换明暗主题" aria-label="切换明暗主题">${I('moon', '切换明暗主题')}</button>
-      <button class="icon-btn" id="settings-btn" title="设置" aria-label="设置">${I('gear', '设置')}</button>
+      <button class="icon-btn" id="outline-btn" title="${t('outline')}" aria-label="${t('outline')}">${I('outline', '大纲面板')}</button>
+      <button class="icon-btn" id="tw-btn" title="${t('typewriter')} (${MOD}+J)" aria-label="打字机专注模式">${I('typewriter', '打字机专注模式')}</button>
+      <button class="icon-btn" id="cmdk-btn" title="${t('palette')} (${MOD}+K)" aria-label="命令面板">${I('palette', '命令面板')}</button>
+      <button class="icon-btn" id="theme-btn" title="${t('theme')}" aria-label="${t('theme')}">${I('moon', '切换明暗主题')}</button>
+      <button class="icon-btn" id="settings-btn" title="${t('settings')}" aria-label="${t('settings')}">${I('gear', '设置')}</button>
     </div>
     ${isWinElectron ? `
     <div class="win-controls">
@@ -98,33 +98,33 @@ root.innerHTML = `
   <div class="body">
     <aside class="sidebar" id="sidebar">
       <div class="sidebar-head">
-        <span class="label">笔记</span>
+        <span class="label">${t('notes')}</span>
         <div class="actions">
-          <button class="icon-btn" id="graph-btn" title="关系图谱" aria-label="关系图谱">${I('graph', '关系图谱')}</button>
-          <button class="icon-btn" id="new-btn" title="新建笔记" aria-label="新建笔记">${I('plus', '新建笔记')}</button>
+          <button class="icon-btn" id="graph-btn" title="${t('graph')}" aria-label="${t('graph')}">${I('graph', '关系图谱')}</button>
+          <button class="icon-btn" id="new-btn" title="${t('newNote')}" aria-label="${t('newNote')}">${I('plus', '新建笔记')}</button>
         </div>
       </div>
-      <input class="search" id="filter-input" placeholder="搜索笔记…" />
+      <input class="search" id="filter-input" placeholder="${t('search')}" />
       <div class="file-list" id="file-list"></div>
     </aside>
     <main class="workspace">
       <div class="pane pane-editor" id="pane-editor"></div>
       <div class="pane pane-preview" id="pane-preview"></div>
       <aside class="outline" id="outline-panel">
-        <div class="sidebar-head"><span class="label">大纲</span></div>
+        <div class="sidebar-head"><span class="label">${t('outlineList')}</span></div>
         <div class="outline-list" id="outline-list"></div>
-        <div class="sidebar-head"><span class="label">反向链接</span></div>
+        <div class="sidebar-head"><span class="label">${t('backlinks')}</span></div>
         <div class="outline-list" id="backlink-list"></div>
       </aside>
       <div class="welcome" id="welcome">
         <h2>Inkwell</h2>
-        <p>安静写作，笔记留在本机</p>
+        <p>${t('welcomeSlogan')}</p>
         <div class="row">
-          <button id="new-note-btn">新建笔记</button>
-          <button id="open-vault-btn" class="ghost">打开文件夹</button>
-          <button id="open-file-btn" class="ghost">打开文件</button>
+          <button id="new-note-btn">${t('newNote')}</button>
+          <button id="open-vault-btn" class="ghost">${t('openVault')}</button>
+          <button id="open-file-btn" class="ghost">${t('openFile')}</button>
         </div>
-        <p class="hint">按 <kbd>${MOD}</kbd>+<kbd>K</kbd> 打开命令面板</p>
+        <p class="hint">按 <kbd>${MOD}</kbd>+<kbd>K</kbd> ${t('hintPalette')}</p>
       </div>
     </main>
   </div>
@@ -923,9 +923,9 @@ async function openTrash() {
   wrap.innerHTML = `
     <div class="modal search-modal">
       <div class="modal-head">
-        <span class="label">回收站</span>
+        <span class="label">${t('trash')}</span>
         <div class="modal-actions">
-          <button class="ghost-btn" id="trash-empty">清空回收站</button>
+          <button class="ghost-btn" id="trash-empty">${t('emptyTrash')}</button>
           <button class="icon-btn" id="trash-close" title="关闭" aria-label="关闭">✕</button>
         </div>
       </div>
@@ -937,7 +937,10 @@ async function openTrash() {
   const list = $('#trash-list')
   const files = api.listTrash ? await api.listTrash(state.vault!) : []
   if (!files.length) {
-    list.innerHTML = '<div class="palette-empty">回收站是空的</div>'
+    const tip = document.createElement('div')
+    tip.className = 'palette-empty'
+    tip.textContent = t('trashEmpty')
+    list.appendChild(tip)
   } else {
     for (const name of files) {
       const row = document.createElement('div')
@@ -948,7 +951,7 @@ async function openTrash() {
       row.appendChild(label)
       const restore = document.createElement('button')
       restore.className = 'ghost-btn'
-      restore.textContent = '恢复'
+      restore.textContent = t('restore')
       restore.onclick = async () => {
         const r = api.restoreTrash ? await api.restoreTrash(state.vault!, name) : { ok: false }
         if (r.ok) { closeTrash(); await refreshFiles() }
@@ -979,12 +982,12 @@ function openSettings() {
   wrap.innerHTML = `
     <div class="modal settings-modal">
       <div class="modal-head">
-        <span class="label">设置</span>
+        <span class="label">${t('settingsTitle')}</span>
         <button class="icon-btn" id="settings-close" title="关闭" aria-label="关闭">✕</button>
       </div>
       <div class="set-cols">
         <div class="set-group">
-          <div class="set-label">主题色</div>
+          <div class="set-label">${t('accent')}</div>
           <div class="set-list" id="accent-list"></div>
         </div>
       </div>
@@ -1001,12 +1004,12 @@ function openSettings() {
       </div>
       <div class="set-cols">
         <div class="set-group">
-          <div class="set-label">字号</div>
-          ${seg('font', state.fontIdx, ['小', '中', '大'])}
+          <div class="set-label">${t('fontSize')}</div>
+          ${seg('font', state.fontIdx, [t('small'), t('medium'), t('large')])}
         </div>
         <div class="set-group">
-          <div class="set-label">行距</div>
-          ${seg('line', state.lineIdx, ['紧凑', '适中', '宽松'])}
+          <div class="set-label">${t('lineHeight')}</div>
+          ${seg('line', state.lineIdx, [t('tight'), t('comfy'), t('loose')])}
         </div>
       </div>
     </div>`
@@ -1039,29 +1042,47 @@ function openSettings() {
       })
     })
   })
-  // updater row
+  // updater row: [version text] ......... [check button]
   const updState = $('#update-state') as HTMLElement
   const updBtn = $('#update-btn') as HTMLButtonElement
+  const cmpSemver = (a: string, b: string) => {
+    const pa = a.replace(/^v/, '').split(/[.-]/).map(x => parseInt(x) || 0)
+    const pb = b.replace(/^v/, '').split(/[.-]/).map(x => parseInt(x) || 0)
+    for (let i = 0; i < 3; i++) if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) - (pb[i] || 0)
+    return 0
+  }
+  updState.textContent = t('curVersion', { v: '…' })
   updBtn.addEventListener('click', async () => {
     if (!api.checkUpdate) return
     updBtn.disabled = true
     updBtn.textContent = '…'
     const r = await api.checkUpdate()
-    if (r.dev) { updState.textContent = t('devMode') }
-    else if (r.version) {
-      updState.textContent = `v${r.version}`
-      updBtn.textContent = t('downloading')
+    if (r.dev) {
+      updState.textContent = t('devMode')
+      updBtn.textContent = t('checkUpdate')
       updBtn.disabled = false
-      updBtn.onclick = async () => {
-        updBtn.disabled = true
-        await api.downloadUpdate?.()
-        updState.textContent = t('dlDone')
+      return
+    }
+    if (r.current) updState.textContent = t('curVersion', { v: 'v' + r.current })
+    if (r.error) {
+      updState.textContent = t('checkFail')
+      updBtn.textContent = t('checkUpdate')
+      updBtn.disabled = false
+      return
+    }
+    if (r.version && r.current && cmpSemver(r.version, r.current) > 0) {
+      // update available; auto-download already in progress → button becomes restart-install
+      updBtn.textContent = t('downloading')
+      api.onUpdateReady?.(() => {
+        updState.textContent = t('curVersion', { v: 'v' + r.current }) + ' → v' + r.version
         updBtn.textContent = t('restartInstall')
         updBtn.disabled = false
         updBtn.onclick = () => api.installUpdate?.()
-      }
+      })
+      // if download finished before we got here, onUpdateReady may already have fired; poll fallback
+      setTimeout(() => { if (updBtn.disabled) { updBtn.textContent = t('restartInstall'); updBtn.disabled = false; updBtn.onclick = () => api.installUpdate?.() } }, 8000)
     } else {
-      updState.textContent = r.error ? t('checkFail') : t('latest')
+      updState.textContent = (r.current ? t('curVersion', { v: 'v' + r.current }) + ' · ' : '') + t('latest')
       updBtn.textContent = t('checkUpdate')
       updBtn.disabled = false
     }
@@ -1071,10 +1092,13 @@ function openSettings() {
   if (langRow) {
     for (const l of LANGS) {
       const b = document.createElement('button')
-      b.className = 'sw-pick lang-pick' + (getLang() === l.id ? ' on' : '')
+      b.className = 'sw-pick lang-pick' + (getLang() === l.id ? ' on cur' : '')
       b.textContent = l.label
-      if (getLang() === l.id) b.classList.add('cur')
-      b.onclick = () => { setLang(l.id as Lang); openSettings(); wrap.remove() }
+      b.onclick = () => {
+        if (getLang() === l.id) return
+        setLang(l.id as Lang)
+        location.reload() // whole UI re-renders in the new language
+      }
       langRow.appendChild(b)
     }
   }
@@ -1442,7 +1466,7 @@ function openPalette() {
   wrap.className = 'palette-overlay'
   wrap.innerHTML = `
     <div class="palette">
-      <input id="palette-input" placeholder="输入命令或搜索笔记…" />
+      <input id="palette-input" placeholder="${t('search')}" />
       <div class="palette-list" id="palette-list"></div>
     </div>`
   wrap.addEventListener('mousedown', e => {
