@@ -117,11 +117,11 @@ root.innerHTML = `
       </aside>
       <div class="welcome" id="welcome">
         <h2>Inkwell</h2>
-        <p>本地优先的 Markdown 写作间</p>
+        <p>为长文而生的本机写作间</p>
         <div class="row">
           <button id="new-note-btn">新建笔记</button>
-          <button id="open-vault-btn">打开文件夹</button>
-          <button id="open-file-btn">打开单个文件</button>
+          <button id="open-vault-btn" class="ghost">打开文件夹</button>
+          <button id="open-file-btn" class="ghost">打开文件</button>
         </div>
         <p class="hint">按 <kbd>${MOD}</kbd>+<kbd>K</kbd> 打开命令面板</p>
       </div>

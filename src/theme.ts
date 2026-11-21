@@ -43,7 +43,7 @@ export type AccentId = keyof typeof ACCENTS
 export function loadAccent(): AccentId {
   let v: string | null = null
   try { v = localStorage.getItem('inkwell:accent') } catch { /* ignore */ }
-  return v && v in ACCENTS ? (v as AccentId) : 'coral'
+  return v && v in ACCENTS ? (v as AccentId) : 'graphite'
 }
 
 export function applyAccent(id: AccentId, mode: ThemeName) {

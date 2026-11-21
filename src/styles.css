@@ -965,3 +965,23 @@ button:focus-visible, input:focus-visible {
 }
 
 #accent-list .sw-pick { margin: 0; }
+
+/* ---------- Welcome: compact buttons, hierarchy via filled vs ghost ---------- */
+
+.welcome .row { margin-top: 8px; }
+
+.welcome .row button {
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.welcome .row button.ghost {
+  background: var(--ink-bg);
+  border: 1px solid var(--ink-border);
+  color: var(--ink-fg);
+  font-weight: 500;
+}
+
+.welcome .row button.ghost:hover { border-color: var(--ink-muted); background: var(--ink-active); }
