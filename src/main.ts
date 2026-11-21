@@ -7,6 +7,10 @@ import { createEditor, type EditorHandle } from './editor'
 import { renderMarkdown } from './markdown'
 import { makeTypewriter } from './typewriter'
 import { wordStat } from './wordstat'
+import { wikiToMarkdown, extractWikiLinks } from './links'
+import { extractHeadings, type Heading } from './outline'
+import { layoutGraph } from './graph'
+import { EditorView } from '@codemirror/view'
 import { api } from './api'
 
 type ViewMode = 'edit' | 'split' | 'preview'
@@ -34,6 +38,9 @@ const state = {
   saveTimer: 0 as unknown as ReturnType<typeof setTimeout>
 }
 
+/* content cache for graph building (path -> raw markdown) */
+const editorCache = new Map<string, string>()
+
 /* ---------- DOM scaffold ---------- */
 
 const root = document.getElementById('app')!
@@ -50,6 +57,7 @@ root.innerHTML = `
       <button data-view="preview">预览</button>
     </div>
     <div class="top-actions">
+      <button class="icon-btn" id="outline-btn" title="大纲面板">☰</button>
       <button class="icon-btn" id="tw-btn" title="打字机专注模式 (${MOD}+J)">⌶</button>
       <button class="icon-btn" id="cmdk-btn" title="命令面板 (${MOD}+K)">${PALETTE_ICON}</button>
       <button class="icon-btn" id="theme-btn" title="切换明暗主题">☾</button>
@@ -59,7 +67,10 @@ root.innerHTML = `
     <aside class="sidebar" id="sidebar">
       <div class="sidebar-head">
         <span class="label">笔记</span>
-        <button class="icon-btn" id="new-btn" title="新建笔记">＋</button>
+        <div class="actions">
+          <button class="icon-btn" id="graph-btn" title="关系图谱">⬡</button>
+          <button class="icon-btn" id="new-btn" title="新建笔记">＋</button>
+        </div>
       </div>
       <input class="search" id="filter-input" placeholder="搜索笔记…" />
       <div class="file-list" id="file-list"></div>
@@ -67,6 +78,10 @@ root.innerHTML = `
     <main class="workspace">
       <div class="pane pane-editor" id="pane-editor"></div>
       <div class="pane pane-preview" id="pane-preview"></div>
+      <aside class="outline" id="outline-panel">
+        <div class="sidebar-head"><span class="label">大纲</span></div>
+        <div class="outline-list" id="outline-list"></div>
+      </aside>
       <div class="welcome" id="welcome">
         <h2>Inkwell</h2>
         <p>本地优先的 Markdown 写作间</p>
@@ -97,6 +112,8 @@ const vaultBtn = $('#vault-btn')
 const stWords = $('#st-words')
 const stRead = $('#st-read')
 const stSave = $('#st-save')
+const outlinePanel = $('#outline-panel')
+const outlineList = $('#outline-list')
 
 /* ---------- Editor ---------- */
 
@@ -125,11 +142,85 @@ function applyView() {
 
 function renderPreview() {
   const text = editor?.view.state.doc.toString() ?? ''
-  previewPane.innerHTML = renderMarkdown(text)
+  previewPane.innerHTML = renderMarkdown(wikiToMarkdown(text))
   for (const a of previewPane.querySelectorAll<HTMLAnchorElement>('a[href]')) {
-    a.target = '_blank'
-    a.rel = 'noopener noreferrer'
+    if (a.getAttribute('href')?.startsWith('#inklink-')) {
+      a.classList.add('inklink')
+      a.target = '_self'
+      a.addEventListener('click', e => {
+        e.preventDefault()
+        const target = decodeURIComponent(a.getAttribute('href')!.slice('#inklink-'.length))
+        void openByName(target)
+      })
+    } else {
+      a.target = '_blank'
+      a.rel = 'noopener noreferrer'
+    }
   }
+}
+
+/* ---------- Open-or-create by wiki name ---------- */
+
+async function openByName(target: string) {
+  if (!state.vault) return
+  const hit = state.files.find(f => f.label.toLowerCase() === target.toLowerCase())
+  if (hit) {
+    await openFile(hit)
+    return
+  }
+  const r = await api.createFile(state.vault, target)
+  if (!r.ok || !r.path) {
+    alert(r.error || `无法创建「${target}」`)
+    return
+  }
+  await refreshFiles(r.path)
+}
+
+/* ---------- Outline ---------- */
+
+let outlineOpen = localStorage.getItem('inkwell:outline') === '1'
+
+function applyOutline() {
+  outlinePanel.style.display = outlineOpen ? '' : 'none'
+  localStorage.setItem('inkwell:outline', outlineOpen ? '1' : '0')
+  $('#outline-btn').classList.toggle('on', outlineOpen)
+}
+
+function renderOutline() {
+  const doc = editor?.view.state.doc.toString() ?? ''
+  renderOutlineList(extractHeadings(doc))
+}
+
+function renderOutlineList(headings: Heading[]) {
+  outlineList.innerHTML = ''
+  if (!headings.length) {
+    const tip = document.createElement('div')
+    tip.className = 'sidebar-empty'
+    tip.textContent = '还没有标题，用 # 开几级目录吧'
+    outlineList.appendChild(tip)
+    return
+  }
+  for (const h of headings) {
+    const b = document.createElement('button')
+    b.className = `outline-item lv${h.level}`
+    const span = document.createElement('span')
+    span.textContent = h.text
+    b.appendChild(span)
+    b.onclick = () => jumpToLine(h.line)
+    outlineList.appendChild(b)
+  }
+}
+
+function jumpToLine(line: number) {
+  if (!editor) return
+  const v = editor.view
+  const lineObj = v.state.doc.line(Math.min(line + 1, v.state.doc.lines))
+  v.dispatch({
+    selection: { anchor: lineObj.from },
+    scrollIntoView: true,
+    effects: EditorView.scrollIntoView(lineObj.from, { y: 'center' })
+  })
+  v.focus()
 }
 
 /* ---------- Status bar ---------- */
@@ -163,6 +254,12 @@ async function refreshFiles(keepPath?: string) {
     name,
     label: labelOf(name)
   }))
+  for (const f of state.files) {
+    if (!editorCache.has(f.path)) {
+      const c = await api.readFile(f.path)
+      if (c !== null) editorCache.set(f.path, c)
+    }
+  }
   renderFileList()
   const keep = keepPath ? state.files.find(f => f.path === keepPath) : null
   if (keep) openFile(keep)
@@ -194,6 +291,7 @@ function renderFileList() {
 async function openFile(f: FileMeta) {
   const ed = ensureEditor()
   const content = (await api.readFile(f.path)) ?? ''
+  editorCache.set(f.path, content)
   ed.view.dispatch({
     changes: { from: 0, to: ed.view.state.doc.length, insert: content }
   })
@@ -203,6 +301,7 @@ async function openFile(f: FileMeta) {
   setSaveState('clean')
   updateStatus()
   renderPreview()
+  renderOutline()
   ed.view.focus()
 }
 
@@ -210,6 +309,7 @@ function onDocChanged() {
   if (!state.current) return
   updateStatus()
   renderPreview()
+  renderOutline()
   setSaveState('dirty')
   clearTimeout(state.saveTimer)
   state.saveTimer = setTimeout(saveCurrent, 600)
@@ -217,8 +317,12 @@ function onDocChanged() {
 
 async function saveCurrent() {
   if (!state.current || !editor) return
-  const ok = await api.writeFile(state.current.path, editor.view.state.doc.toString())
-  if (ok) setSaveState('clean')
+  const content = editor.view.state.doc.toString()
+  const ok = await api.writeFile(state.current.path, content)
+  if (ok) {
+    editorCache.set(state.current.path, content)
+    setSaveState('clean')
+  }
 }
 
 async function newNote() {
@@ -253,6 +357,7 @@ async function deleteCurrent() {
     alert('删除失败')
     return
   }
+  editorCache.delete(state.current.path)
   state.current = null
   editor?.view.dispatch({ changes: { from: 0, to: editor.view.state.doc.length, insert: '' } })
   welcomeEl.style.display = ''
@@ -270,6 +375,64 @@ async function pickVault(): Promise<boolean> {
   welcomeEl.style.display = 'none'
   await refreshFiles()
   return true
+}
+
+/* ---------- Graph view ---------- */
+
+function renderGraphView() {
+  const svg = $('#graph-svg')
+  const input = state.files.map(f => ({
+    label: f.label,
+    outgoing: extractWikiLinks(editorCache.get(f.path) ?? '').map(l => l.target)
+  }))
+  const g = layoutGraph({ nodes: input })
+  svg.setAttribute('viewBox', `0 0 ${g.width} ${g.height}`)
+  const R = 7 + Math.min(9, g.nodes.reduce((s, n) => s + n.degree, 0) * 0.6 / Math.max(1, g.nodes.length))
+  let html = ''
+  for (const e of g.edges) {
+    const a = g.nodes.find(n => n.id === e.from)!
+    const b = g.nodes.find(n => n.id === e.to)!
+    html += `<line x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}" class="g-edge"/>`
+  }
+  for (const n of g.nodes) {
+    const r = n.orphan ? 6 : 7 + n.degree * 1.6
+    html += `<g class="g-node${n.id === state.current?.label ? ' cur' : ''}" data-id="${n.id}" transform="translate(${n.x.toFixed(1)},${n.y.toFixed(1)})">`
+    html += `<circle r="${r.toFixed(1)}" ${n.orphan ? 'class="orphan"' : ''}/>`
+    html += `<text y="${(r + 11).toFixed(1)}" text-anchor="middle"></text></g>`
+  }
+  svg.innerHTML = html
+  for (const t of svg.querySelectorAll<SVGTextElement>('.g-node text')) {
+    t.textContent = t.parentElement!.dataset.id || ''
+  }
+  svg.querySelectorAll<SVGGElement>('.g-node').forEach(el => {
+    el.addEventListener('click', () => {
+      const f = state.files.find(x => x.label === el.dataset.id)
+      if (f) { closeGraphModal(); void openFile(f) }
+    })
+  })
+}
+
+function openGraphModal() {
+  if ($('#graph-modal')) return
+  const wrap = document.createElement('div')
+  wrap.id = 'graph-modal'
+  wrap.className = 'modal-overlay'
+  wrap.innerHTML = `
+    <div class="modal graph-modal">
+      <div class="modal-head">
+        <span class="label">关系图谱</span>
+        <button class="icon-btn" id="graph-close" title="关闭">✕</button>
+      </div>
+      <svg id="graph-svg"></svg>
+    </div>`
+  wrap.addEventListener('mousedown', e => { if (e.target === wrap) closeGraphModal() })
+  $('#palette-root').appendChild(wrap)
+  $('#graph-close').addEventListener('click', closeGraphModal)
+  renderGraphView()
+}
+
+function closeGraphModal() {
+  $('#graph-modal')?.remove()
 }
 
 /* ---------- Theme ---------- */
@@ -312,6 +475,8 @@ function commands(): Command[] {
     { id: 'theme', icon: state.theme === 'dark' ? '☀' : '☾', label: '切换明暗主题', run: toggleTheme },
     { id: 'tw', icon: '⌶', label: '打字机专注模式', hint: `${MOD}+J`, run: () => setTypewriter(!state.typewriter) },
     { id: 'save', icon: '⟳', label: '保存当前笔记', hint: `${MOD}+S`, run: saveCurrent },
+    { id: 'outline', icon: '☰', label: '大纲面板：开/关', run: () => { outlineOpen = !outlineOpen; applyOutline() } },
+    { id: 'graph', icon: '⬡', label: '查看关系图谱', run: openGraphModal },
     { id: 'folder', icon: '📁', label: '打开资料库文件夹…', run: pickVault }
   ]
   if (state.current) list.push({ id: 'del', icon: '✕', label: `删除「${state.current.name}」`, run: deleteCurrent })
@@ -426,6 +591,8 @@ $('#view-seg').addEventListener('click', e => {
 })
 
 $('#theme-btn').addEventListener('click', toggleTheme)
+$('#outline-btn').addEventListener('click', () => { outlineOpen = !outlineOpen; applyOutline() })
+$('#graph-btn').addEventListener('click', openGraphModal)
 $('#tw-btn').addEventListener('click', () => setTypewriter(!state.typewriter))
 $('#cmdk-btn').addEventListener('click', openPalette)
 $('#new-btn').addEventListener('click', newNote)
@@ -463,9 +630,11 @@ window.addEventListener('beforeunload', () => {
 state.theme = loadTheme()
 applyThemeUI()
 applyView()
+applyOutline()
 setTypewriter(false)
 ensureEditor()
 updateStatus()
 renderPreview()
+renderOutline()
 
 

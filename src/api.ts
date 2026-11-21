@@ -31,23 +31,30 @@ const webApi: InkwellApi = {
   },
 
   async readDir(vault: string) {
-    const raw = lsGet('vault:' + vault)
-    if (!raw) return null
-    const files = Object.keys(JSON.parse(raw).files).sort((a: string, b: string) => a.localeCompare(b, 'zh'))
+    // enumerate real per-file keys instead of the (never-populated) manifest
+    const prefix = 'inkwell:vault:' + vault + '/files/'
+    const files: string[] = []
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i)
+        if (k && k.startsWith(prefix)) files.push(k.slice(prefix.length))
+      }
+    } catch { return null }
+    files.sort((a, b) => a.localeCompare(b, 'zh'))
     return { files, folders: [] }
   },
 
   async readFile(p: string) {
-    const raw = lsGet('vault:' + p)
+    const raw = lsGet(p)
     return raw ? JSON.parse(raw).content : null
   },
 
   async writeFile(p: string, content: string) {
-    const raw = lsGet('vault:' + p)
+    const raw = lsGet(p)
     if (!raw) return false
     const entry = JSON.parse(raw)
     entry.content = content
-    lsSet('vault:' + p, JSON.stringify(entry))
+    lsSet(p, JSON.stringify(entry))
     return true
   },
 
@@ -60,14 +67,14 @@ const webApi: InkwellApi = {
   },
 
   async deleteFile(p: string) {
-    const raw = lsGet('vault:' + p)
+    const raw = lsGet(p)
     if (!raw) return false
     try { localStorage.removeItem('inkwell:' + p) } catch { return false }
     return true
   },
 
   async renameFile(p: string, newName: string) {
-    const raw = lsGet('vault:' + p)
+    const raw = lsGet(p)
     if (!raw) return { ok: false, error: '文件不存在' }
     const safe = newName.replace(/[\\/:*?"<>|]/g, '-').trim()
     const dir = p.slice(0, p.lastIndexOf('/files/') + 7)
