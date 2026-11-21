@@ -696,6 +696,7 @@ input {
 .win-controls {
   display: flex;
   align-items: center;
+  padding-right: 8px;
   align-self: stretch;
   margin-left: 6px;
   -webkit-app-region: no-drag;
