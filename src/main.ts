@@ -73,7 +73,7 @@ root.innerHTML = `
 <div id="app-root">
   <header class="topbar">
     ${isMac ? '<div class="traffic-dots"><span class="dot-close"></span><span class="dot-min"></span><span class="dot-max"></span></div>' : ''}
-    <span class="brand"><svg viewBox="0 0 512 512" width="18" height="18" aria-hidden="true"><rect width="512" height="512" rx="112" fill="#FFFFFF"/><rect x="16" y="16" width="480" height="480" rx="96" fill="none" stroke="#E4E2DB" stroke-width="8"/><path d="M88 372 C 170 368, 260 360, 340 330" fill="none" stroke="#2C2C2A" stroke-width="30" stroke-linecap="round"/><g transform="rotate(-40 296 180)"><path d="M296 84 L348 210 L296 252 L244 210 Z" fill="#2C2C2A"/><circle cx="296" cy="192" r="16" fill="#FFFFFF"/><path d="M296 208 L296 252" stroke="#FFFFFF" stroke-width="10" stroke-linecap="round"/></g><path d="M236 300 c 11 17, 17 26, 17 36 a 17 17 0 1 1 -34 0 c 0 -10, 6 -19, 17 -36 z" fill="#D85A30"/></svg></span>
+    <span class="brand"><svg viewBox="0 0 512 512" width="18" height="18" aria-hidden="true"><rect width="512" height="512" rx="112" fill="#FFFFFF"/><rect x="16" y="16" width="480" height="480" rx="96" fill="none" stroke="#ECEAE3" stroke-width="8"/><path d="M96 372 C 190 366, 300 356, 408 300" fill="none" stroke="#D85A30" stroke-width="36" stroke-linecap="round"/><g transform="rotate(-42 290 190)"><path d="M290 78 L350 214 L290 262 L230 214 Z" fill="#2C2C2A"/><circle cx="290" cy="196" r="17" fill="#FFFFFF"/><path d="M290 213 L290 262" stroke="#FFFFFF" stroke-width="11" stroke-linecap="round"/></g></svg></span>
     <span class="app-title">Inkwell</span>
     <button class="vault-name" id="vault-btn" title="${t('openVaultTitle')}">${t('vault')}</button>
     <div class="seg" id="view-seg">
@@ -1083,16 +1083,23 @@ function openSettings() {
       return
     }
     if (r.version && r.current && cmpSemver(r.version, r.current) > 0) {
-      // update available; auto-download already in progress → button becomes restart-install
-      updBtn.textContent = t('downloading')
+      // update available; auto-download runs immediately → live progress bar, then restart-install
+      const fmt = (bps: number) => bps > 1048576 ? (bps / 1048576).toFixed(1) + ' MB/s' : Math.round(bps / 1024) + ' KB/s'
+      api.onUpdateProgress?.(p => {
+        updState.innerHTML = '<div class="dl-bar"><div class="dl-fill"></div></div><span class="dl-text"></span>'
+        const fill = updState.querySelector('.dl-fill') as HTMLElement
+        const txt = updState.querySelector('.dl-text') as HTMLElement
+        fill.style.width = Math.min(100, p.percent) + '%'
+        txt.textContent = `${Math.round(p.percent)}% · ${fmt(p.bps)}`
+      })
       api.onUpdateReady?.(() => {
         updState.textContent = t('curVersion', { v: 'v' + r.current }) + ' → v' + r.version
         updBtn.textContent = t('restartInstall')
         updBtn.disabled = false
         updBtn.onclick = () => api.installUpdate?.()
       })
-      // if download finished before we got here, onUpdateReady may already have fired; poll fallback
-      setTimeout(() => { if (updBtn.disabled) { updBtn.textContent = t('restartInstall'); updBtn.disabled = false; updBtn.onclick = () => api.installUpdate?.() } }, 8000)
+      // safety net: if download finished before listener attached
+      setTimeout(() => { if (updBtn.disabled) { updBtn.textContent = t('restartInstall'); updBtn.disabled = false; updBtn.onclick = () => api.installUpdate?.() } }, 12000)
     } else {
       updState.textContent = t('latest')
       updBtn.textContent = t('checkUpdate')

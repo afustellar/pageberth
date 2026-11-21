@@ -17,6 +17,7 @@ contextBridge.exposeInMainWorld('inkwell', {
   downloadUpdate: () => ipcRenderer.invoke('ink:downloadUpdate'),
   installUpdate: () => ipcRenderer.send('ink:installUpdate'),
   onUpdate: (cb) => ipcRenderer.on('ink:update', (_e, v) => cb(v)),
+  onUpdateProgress: (cb) => ipcRenderer.on('ink:update-progress', (_e, p) => cb(p)),
   onUpdateReady: (cb) => ipcRenderer.on('ink:update-ready', () => cb()),
   onOpenFile: (cb) => ipcRenderer.on('ink:open-file', (_e, p) => cb(p)),
   renameFile: (p, newName) => ipcRenderer.invoke('ink:renameFile', p, newName),

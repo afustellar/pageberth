@@ -18,6 +18,7 @@ export interface InkwellApi {
   downloadUpdate?(): Promise<boolean>
   installUpdate?(): void
   onUpdate?(cb: (version: string) => void): void
+  onUpdateProgress?(cb: (p: { percent: number; bps: number }) => void): void
   onUpdateReady?(cb: () => void): void
   onOpenFile?(cb: (path: string) => void): void
   winControl?(action: 'minimize' | 'maximize' | 'close'): void

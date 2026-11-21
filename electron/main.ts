@@ -71,6 +71,9 @@ if (!gotLock) {
     autoUpdater.on('update-available', (info) => {
       win?.webContents.send('ink:update', info.version)
     })
+    autoUpdater.on('download-progress', (p) => {
+      win?.webContents.send('ink:update-progress', { percent: p.percent, bps: p.bytesPerSecond })
+    })
     autoUpdater.on('update-downloaded', () => {
       win?.webContents.send('ink:update-ready')
     })
