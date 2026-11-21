@@ -263,6 +263,8 @@ function applyView() {
 
 function renderPreview() {
   const text = editor?.view.state.doc.toString() ?? ''
+  // preserve scroll position across re-renders (typing in split mode used to jump the preview to top)
+  const prevScroll = previewPane.scrollTop
   previewPane.innerHTML = renderMarkdown(wikiToMarkdown(text))
   for (const a of previewPane.querySelectorAll<HTMLAnchorElement>('a[href]')) {
     if (a.getAttribute('href')?.startsWith('#inklink-')) {
@@ -278,7 +280,11 @@ function renderPreview() {
       a.rel = 'noopener noreferrer'
     }
   }
-  // resolve relative asset paths so pasted images render in both runtimes
+  if (prevScroll > 0) {
+    const newHeight = previewPane.scrollHeight
+    previewPane.scrollTop = Math.min(prevScroll, Math.max(0, newHeight - previewPane.clientHeight))
+  }
+// resolve relative asset paths so pasted images render in both runtimes
   for (const img of previewPane.querySelectorAll<HTMLImageElement>('img[src]')) {
     const src = img.getAttribute('src') || ''
     if (/^(https?:|data:|file:)/.test(src) || src.startsWith('assets/')) {
@@ -345,15 +351,20 @@ function renderOutlineList(headings: Heading[]) {
   }
 }
 
+function scrollPreviewToHeading(line: number) {
+  if (!editor) return
+  const doc = editor.view.state.doc.toString()
+  const idx = extractHeadings(doc).filter(h => h.line <= line).length - 1
+  const els = previewPane.querySelectorAll('h1, h2, h3, h4, h5, h6')
+  const el = els[Math.max(0, Math.min(idx, els.length - 1))]
+  el?.scrollIntoView({ block: 'start' })
+}
+
 function jumpToLine(line: number) {
   if (!editor) return
   // preview mode: the editor is hidden, scroll the rendered preview to the matching heading instead
   if (state.view === 'preview') {
-    const doc = editor.view.state.doc.toString()
-    const idx = extractHeadings(doc).filter(h => h.line <= line).length - 1
-    const els = previewPane.querySelectorAll('h1, h2, h3, h4, h5, h6')
-    const el = els[Math.max(0, Math.min(idx, els.length - 1))]
-    el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    scrollPreviewToHeading(line)
     return
   }
   const v = editor.view
@@ -363,6 +374,8 @@ function jumpToLine(line: number) {
     scrollIntoView: true,
     effects: EditorView.scrollIntoView(lineObj.from, { y: 'center' })
   })
+  // split mode: keep the preview pane in sync
+  if (state.view === 'split') scrollPreviewToHeading(line)
   v.focus()
 }
 
@@ -506,14 +519,17 @@ async function openFile(f: FileMeta) {
   const ed = ensureEditor()
   const content = (await api.readFile(f.path)) ?? ''
   editorCache.set(f.path, content)
+  // mark current BEFORE dispatch so the doc-replace doesn't count as user editing
+  state.current = f
+  lastCount = wordStat(content).words
   ed.view.dispatch({
     changes: { from: 0, to: ed.view.state.doc.length, insert: content }
   })
-  state.current = f
   trackRecent(f.path)
   renderFileList()
   applyView()
   setSaveState('clean')
+  clearTimeout(state.saveTimer) // the dispatch marked dirty; cancel any pending save
   updateStatus()
   renderPreview()
   renderOutline()
@@ -606,8 +622,10 @@ async function deleteCurrent() {
     editor?.view.dispatch({ changes: { from: 0, to: editor.view.state.doc.length, insert: '' } })
     applyView()
     renderFileList()
+    setSaveState('clean')
     updateStatus()
     renderPreview()
+    renderOutline()
     return
   }
   if (!confirm(`删除「${state.current.name}」？此操作不可撤销。`)) return
@@ -620,8 +638,10 @@ async function deleteCurrent() {
   state.current = null
   editor?.view.dispatch({ changes: { from: 0, to: editor.view.state.doc.length, insert: '' } })
   applyView()
+  setSaveState('clean')
   updateStatus()
   renderPreview()
+  renderOutline()
   await refreshFiles()
 }
 
