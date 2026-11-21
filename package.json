@@ -2,7 +2,7 @@
   "name": "inkwell",
   "private": true,
   "version": "0.1.0",
-  "description": "Inkwell 鈥?local-first markdown writing app",
+  "description": "Inkwell — local-first markdown writing app",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
