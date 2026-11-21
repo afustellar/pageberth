@@ -1,15 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <!-- Inkwell mark: a well of ink with a dipped nib dripping a drop -->
+  <!-- Inkwell v3: reads as "M"arkdown - ink-drop forms the M, pen nib below -->
   <rect width="512" height="512" rx="112" fill="#D85A30"/>
-  <!-- well body -->
-  <path d="M150 210 h212 l-26 170 a40 40 0 0 1 -40 34 h-80 a40 40 0 0 1 -40 -34 z" fill="#FFFFFF"/>
-  <!-- well rim -->
-  <ellipse cx="256" cy="210" rx="106" ry="26" fill="#FFFFFF"/>
-  <ellipse cx="256" cy="210" rx="76" ry="17" fill="#B4451F"/>
-  <!-- ink surface -->
-  <ellipse cx="256" cy="212" rx="60" ry="12" fill="#2C2C2A"/>
-  <!-- nib dipping in -->
-  <path d="M320 92 l30 118 -44 -22 z" fill="#2C2C2A" stroke="#2C2C2A" stroke-width="10" stroke-linejoin="round"/>
-  <!-- falling drop -->
-  <path d="M262 300 c14 22 22 34 22 46 a22 22 0 1 1 -44 0 c0 -12 8 -24 22 -46 z" fill="#2C2C2A"/>
+  <!-- rounded white card echoing a markdown badge -->
+  <rect x="64" y="128" width="384" height="256" rx="40" fill="#FFFFFF"/>
+  <!-- M drawn as two ink strokes -->
+  <path d="M120 320 v-112 l48 72 48-72 v112" fill="none" stroke="#2C2C2A" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- down-arrow of the markdown mark -->
+  <path d="M368 208 v96 m-30 -30 l30 30 30 -30" fill="none" stroke="#2C2C2A" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- coral drop accent between M and arrow -->
+  <circle cx="256" cy="256" r="16" fill="#D85A30"/>
 </svg>

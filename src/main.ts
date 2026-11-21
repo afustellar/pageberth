@@ -41,6 +41,8 @@ const ICONS: Record<string, string> = {
   moon: '<path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"/>',
   graph: '<circle cx="5.5" cy="6" r="2.4"/><circle cx="18.5" cy="5" r="2.4"/><circle cx="16.5" cy="18.5" r="2.4"/><path d="M7.5 7.2l9-1.7M17.6 7.2l-1.4 9M7.2 8.1l7.6 8.5"/>',
   gear: '<circle cx="12" cy="12" r="3.2"/><path d="M12 2.8l1.2 2.7 2.9-.6 1 2.8 2.7 1.2-1.6 2.5 1.6 2.5-2.7 1.2-1 2.8-2.9-.6L12 21.2l-1.2-2.7-2.9.6-1-2.8-2.7-1.2L5.8 12 4.2 9.5l2.7-1.2 1-2.8 2.9.6z"/>',
+  search: '<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>',
+  switcher: '<rect x="3.5" y="4.5" width="17" height="6" rx="1.5"/><rect x="3.5" y="13.5" width="12" height="6" rx="1.5"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
   logo: '<path d="M12 3l4.2 6.3c0 4.2-1.6 7-4.2 12.7-2.6-5.7-4.2-8.5-4.2-12.7z"/><circle cx="12" cy="11" r="1.6"/><path d="M12 12.8V19"/>'
 }
@@ -70,7 +72,7 @@ root.innerHTML = `
 <div id="app-root">
   <header class="topbar">
     ${isMac ? '<div class="traffic-dots"><span class="dot-close"></span><span class="dot-min"></span><span class="dot-max"></span></div>' : ''}
-    <span class="brand"><svg viewBox="0 0 512 512" width="18" height="18" aria-hidden="true"><rect width="512" height="512" rx="112" fill="#D85A30"/><path d="M150 210 h212 l-26 170 a40 40 0 0 1 -40 34 h-80 a40 40 0 0 1 -40 -34 z" fill="#FFFFFF"/><ellipse cx="256" cy="210" rx="106" ry="26" fill="#FFFFFF"/><ellipse cx="256" cy="210" rx="76" ry="17" fill="#B4451F"/><ellipse cx="256" cy="212" rx="60" ry="12" fill="#2C2C2A"/><path d="M320 92 l30 118 -44 -22 z" fill="#2C2C2A" stroke="#2C2C2A" stroke-width="10" stroke-linejoin="round"/><path d="M262 300 c14 22 22 34 22 46 a22 22 0 1 1 -44 0 c0 -12 8 -24 22 -46 z" fill="#2C2C2A"/></svg></span>
+    <span class="brand"><svg viewBox="0 0 512 512" width="18" height="18" aria-hidden="true"><rect width="512" height="512" rx="112" fill="#D85A30"/><rect x="64" y="128" width="384" height="256" rx="40" fill="#FFFFFF"/><path d="M120 320 v-112 l48 72 48-72 v112" fill="none" stroke="#2C2C2A" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/><path d="M368 208 v96 m-30 -30 l30 30 30 -30" fill="none" stroke="#2C2C2A" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/><circle cx="256" cy="256" r="16" fill="#D85A30"/></svg></span>
     <span class="app-title">Inkwell</span>
     <button class="vault-name" id="vault-btn" title="打开资料库文件夹">未打开资料库</button>
     <div class="seg" id="view-seg">
@@ -110,6 +112,8 @@ root.innerHTML = `
       <aside class="outline" id="outline-panel">
         <div class="sidebar-head"><span class="label">大纲</span></div>
         <div class="outline-list" id="outline-list"></div>
+        <div class="sidebar-head"><span class="label">反向链接</span></div>
+        <div class="outline-list" id="backlink-list"></div>
       </aside>
       <div class="welcome" id="welcome">
         <h2>Inkwell</h2>
@@ -126,6 +130,7 @@ root.innerHTML = `
   <footer class="statusbar">
     <span id="st-words">0 字</span>
     <span id="st-read">约 1 分钟</span>
+    <span id="st-daily">今日 +0 字</span>
     <span class="spacer"></span>
     <span class="save-state" id="st-save">就绪</span>
   </footer>
@@ -142,8 +147,50 @@ const vaultBtn = $('#vault-btn')
 const stWords = $('#st-words')
 const stRead = $('#st-read')
 const stSave = $('#st-save')
+const stDaily = $('#st-daily')
 const outlinePanel = $('#outline-panel')
 const outlineList = $('#outline-list')
+const backlinkList = $('#backlink-list')
+
+function renderOutline() {
+  const doc = editor?.view.state.doc.toString() ?? ''
+  renderOutlineList(extractHeadings(doc))
+  renderBacklinks()
+}
+
+/** Which notes link to the current one via [[...]] */
+function renderBacklinks() {
+  backlinkList.innerHTML = ''
+  if (!state.current || state.current.scratch) {
+    const tip = document.createElement('div')
+    tip.className = 'sidebar-empty'
+    tip.textContent = '保存后这里会显示谁链接了这篇笔记'
+    backlinkList.appendChild(tip)
+    return
+  }
+  const target = state.current.label.toLowerCase()
+  const sources = state.files.filter(f => {
+    if (f.path === state.current!.path) return false
+    return extractWikiLinks(editorCache.get(f.path) ?? '').some(l => l.target.toLowerCase() === target)
+  })
+  if (!sources.length) {
+    const tip = document.createElement('div')
+    tip.className = 'sidebar-empty'
+    tip.textContent = '还没有笔记链接到这里，在别的笔记里写 [[名字]] 试试'
+    backlinkList.appendChild(tip)
+    return
+  }
+  for (const f of sources) {
+    const b = document.createElement('button')
+    b.className = 'outline-item backlink'
+    const span = document.createElement('span')
+    span.textContent = f.label
+    b.appendChild(span)
+    b.title = f.name
+    b.onclick = () => void openFile(f)
+    backlinkList.appendChild(b)
+  }
+}
 
 /* ---------- Editor ---------- */
 
@@ -151,9 +198,50 @@ let editor: EditorHandle | null = null
 
 function ensureEditor() {
   if (editor) return editor
-  editor = createEditor(editorPane, '', () => onDocChanged(), [makeTypewriter(() => state.typewriter)])
+  editor = createEditor(editorPane, '', () => onDocChanged(), [
+    makeTypewriter(() => state.typewriter),
+    EditorView.domEventHandlers({
+      paste: (event, view) => {
+        const files = [...(event.clipboardData?.files ?? [])]
+        const img = files.find(f => f.type.startsWith('image/'))
+        if (!img) return false
+        void pasteImage(img, view)
+        return true
+      },
+      drop: (event, view) => {
+        const files = [...(event.dataTransfer?.files ?? [])]
+        const img = files.find(f => f.type.startsWith('image/'))
+        if (!img) return false
+        void pasteImage(img, view)
+        return true
+      }
+    })
+  ])
   editor.view.dom.style.height = '100%'
   return editor
+}
+
+let imgSeq = 0
+
+async function pasteImage(file: File, view: EditorView) {
+  if (!api.writeBinary) return
+  let dir = state.vault
+  if (!dir) {
+    const okv = await pickVault()
+    if (!okv) return
+    dir = state.vault!
+  }
+  const buf = new Uint8Array(await file.arrayBuffer())
+  const ext = file.type === 'image/jpeg' ? 'jpg' : file.type === 'image/gif' ? 'gif' : file.type === 'image/webp' ? 'webp' : 'png'
+  const name = `paste-${Date.now()}-${imgSeq++}.${ext}`
+  const r = await api.writeBinary(dir, name, buf)
+  if (!r.ok || !r.path) {
+    alert('图片保存失败：' + (r.error || '未知错误'))
+    return
+  }
+  const rel = `assets/${name}`
+  view.dispatch(view.state.replaceSelection(`![${name}](${rel})\n`))
+  view.focus()
 }
 
 /* ---------- View mode ---------- */
@@ -190,6 +278,24 @@ function renderPreview() {
       a.rel = 'noopener noreferrer'
     }
   }
+  // resolve relative asset paths so pasted images render in both runtimes
+  for (const img of previewPane.querySelectorAll<HTMLImageElement>('img[src]')) {
+    const src = img.getAttribute('src') || ''
+    if (/^(https?:|data:|file:)/.test(src) || src.startsWith('assets/')) {
+      if (src.startsWith('assets/')) {
+        if (api.isElectron && state.vault) {
+          img.src = 'file://' + state.vault.replace(/\\/g, '/') + '/' + src
+        } else {
+          // web: swap in the stored data URL
+          const raw = localStorage.getItem('inkwell:vault:' + state.vault + '/' + src)
+          if (raw) {
+            try { img.src = JSON.parse(raw).dataUrl || src } catch { /* keep */ }
+          }
+        }
+      }
+      img.addEventListener('error', () => { img.style.opacity = '0.4'; img.title = '图片未找到: ' + src })
+    }
+  }
 }
 
 /* ---------- Open-or-create by wiki name ---------- */
@@ -219,11 +325,6 @@ function applyOutline() {
   $('#outline-btn').classList.toggle('on', outlineOpen)
 }
 
-function renderOutline() {
-  const doc = editor?.view.state.doc.toString() ?? ''
-  renderOutlineList(extractHeadings(doc))
-}
-
 function renderOutlineList(headings: Heading[]) {
   outlineList.innerHTML = ''
   if (!headings.length) {
@@ -246,6 +347,15 @@ function renderOutlineList(headings: Heading[]) {
 
 function jumpToLine(line: number) {
   if (!editor) return
+  // preview mode: the editor is hidden, scroll the rendered preview to the matching heading instead
+  if (state.view === 'preview') {
+    const doc = editor.view.state.doc.toString()
+    const idx = extractHeadings(doc).filter(h => h.line <= line).length - 1
+    const els = previewPane.querySelectorAll('h1, h2, h3, h4, h5, h6')
+    const el = els[Math.max(0, Math.min(idx, els.length - 1))]
+    el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    return
+  }
   const v = editor.view
   const lineObj = v.state.doc.line(Math.min(line + 1, v.state.doc.lines))
   v.dispatch({
@@ -263,6 +373,39 @@ function updateStatus() {
   const s = wordStat(text)
   stWords.textContent = `${s.words} 字`
   stRead.textContent = `约 ${s.readMinutes} 分钟`
+  const today = todayKey()
+  const rec = readDaily(today)
+  stDaily.textContent = `今日 +${rec.words} 字`
+}
+
+/* ---------- Daily writing stats ---------- */
+
+function todayKey(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+function readDaily(key: string): { words: number } {
+  try {
+    const all = JSON.parse(localStorage.getItem('inkwell:daily') || '{}')
+    return all[key] || { words: 0 }
+  } catch { return { words: 0 } }
+}
+
+let lastCount = 0
+
+function bumpDaily(currentWords: number) {
+  const key = todayKey()
+  const all = (() => {
+    try { return JSON.parse(localStorage.getItem('inkwell:daily') || '{}') } catch { return {} }
+  })()
+  const rec = all[key] || { words: 0 }
+  // count net growth since last keystroke (deletions don't inflate)
+  const delta = currentWords - lastCount
+  if (delta > 0) rec.words += delta
+  lastCount = currentWords
+  all[key] = rec
+  try { localStorage.setItem('inkwell:daily', JSON.stringify(all)) } catch { /* ignore */ }
 }
 
 function setSaveState(kind: 'clean' | 'dirty' | 'saved') {
@@ -367,6 +510,7 @@ async function openFile(f: FileMeta) {
     changes: { from: 0, to: ed.view.state.doc.length, insert: content }
   })
   state.current = f
+  trackRecent(f.path)
   renderFileList()
   applyView()
   setSaveState('clean')
@@ -379,6 +523,7 @@ async function openFile(f: FileMeta) {
 function onDocChanged() {
   if (!state.current) return
   updateStatus()
+  bumpDaily(wordStat(editor?.view.state.doc.toString() ?? '').words)
   renderPreview()
   renderOutline()
   setSaveState('dirty')
@@ -821,6 +966,8 @@ function commands(): Command[] {
     { id: 'save', icon: '⟳', label: '保存当前笔记', hint: `${MOD}+S`, run: saveCurrent },
     { id: 'outline', icon: '☰', label: '大纲面板：开/关', run: () => { outlineOpen = !outlineOpen; applyOutline() } },
     { id: 'graph', icon: '⬡', label: '查看关系图谱', run: openGraphModal },
+    { id: 'search', icon: '⌕', label: '全文搜索', hint: `${MOD}+⇧F`, run: openSearch },
+    { id: 'switch', icon: '⇄', label: '快速切换笔记', hint: `${MOD}+P`, run: openQuickSwitch },
     { id: 'settings', icon: '⚙', label: '打开设置', run: openSettings },
     { id: 'folder', icon: '📁', label: '打开资料库文件夹…', run: pickVault }
   ]
@@ -850,6 +997,144 @@ function score(s: string, q: string): number {
 
 let paletteSel = 0
 let paletteItems: Command[] = []
+
+/* ---------- Full-text search across notes ---------- */
+
+function openSearch() {
+  if ($('#search-modal')) return
+  const wrap = document.createElement('div')
+  wrap.id = 'search-modal'
+  wrap.className = 'modal-overlay'
+  wrap.innerHTML = `
+    <div class="modal search-modal">
+      <div class="modal-head">
+        <span class="label">全文搜索</span>
+        <button class="icon-btn" id="search-close" title="关闭" aria-label="关闭">✕</button>
+      </div>
+      <input id="search-input" placeholder="在所有笔记的内容中搜索…" />
+      <div class="palette-list" id="search-results"></div>
+    </div>`
+  wrap.addEventListener('mousedown', e => { if (e.target === wrap) closeSearch() })
+  $('#palette-root').appendChild(wrap)
+  $('#search-close').addEventListener('click', closeSearch)
+  const input = $<HTMLInputElement>('#search-input')
+  const results = $('#search-results')
+  input.focus()
+
+  function run() {
+    const q = input.value.trim().toLowerCase()
+    results.innerHTML = ''
+    if (q.length < 2) {
+      results.innerHTML = '<div class="palette-empty">输入至少两个字符</div>'
+      return
+    }
+    const hits: { file: FileMeta; snippet: string }[] = []
+    for (const f of state.files) {
+      const content = (f.path === state.current?.path && editor ? editor.view.state.doc.toString() : editorCache.get(f.path)) ?? ''
+      const lower = content.toLowerCase()
+      let pos = lower.indexOf(q)
+      let count = 0
+      while (pos >= 0 && count < 3) {
+        const start = Math.max(0, pos - 24)
+        const snippet = (start > 0 ? '…' : '') + content.slice(start, pos + q.length + 40).replace(/\s+/g, ' ') + '…'
+        hits.push({ file: f, snippet })
+        count++
+        pos = lower.indexOf(q, pos + q.length)
+      }
+      if (count === 3 && lower.indexOf(q, pos) >= 0) {
+        hits[hits.length - 1].snippet = hits[hits.length - 1].snippet + `（更多匹配）`
+      }
+    }
+    if (!hits.length) {
+      results.innerHTML = `<div class="palette-empty">没有包含「${q}」的笔记</div>`
+      return
+    }
+    for (const h of hits) {
+      const b = document.createElement('button')
+      b.className = 'search-hit'
+      b.innerHTML = `<span class="sh-file"></span><span class="sh-snippet"></span>`
+      ;(b.querySelector('.sh-file') as HTMLElement).textContent = h.file.label
+      ;(b.querySelector('.sh-snippet') as HTMLElement).textContent = h.snippet
+      b.onclick = () => { closeSearch(); void openFile(h.file) }
+      results.appendChild(b)
+    }
+  }
+  input.addEventListener('input', run)
+  input.addEventListener('keydown', e => { if (e.key === 'Escape') closeSearch() })
+  run()
+}
+
+function closeSearch() {
+  $('#search-modal')?.remove()
+}
+
+/* ---------- Quick switcher (recent-first) ---------- */
+
+const recentStack: string[] = []
+
+function trackRecent(path: string) {
+  const i = recentStack.indexOf(path)
+  if (i >= 0) recentStack.splice(i, 1)
+  recentStack.unshift(path)
+  if (recentStack.length > 20) recentStack.pop()
+}
+
+function openQuickSwitch() {
+  if ($('#switch-modal')) return
+  const wrap = document.createElement('div')
+  wrap.id = 'switch-modal'
+  wrap.className = 'modal-overlay'
+  wrap.innerHTML = `
+    <div class="modal search-modal">
+      <div class="modal-head">
+        <span class="label">切换笔记</span>
+        <button class="icon-btn" id="switch-close" title="关闭" aria-label="关闭">✕</button>
+      </div>
+      <input id="switch-input" placeholder="笔记名…（最近打开的排前面）" />
+      <div class="palette-list" id="switch-results"></div>
+    </div>`
+  wrap.addEventListener('mousedown', e => { if (e.target === wrap) closeSwitch() })
+  $('#palette-root').appendChild(wrap)
+  $('#switch-close').addEventListener('click', closeSwitch)
+  const input = $<HTMLInputElement>('#switch-input')
+  const results = $('#switch-results')
+
+  function paint() {
+    const q = input.value.trim().toLowerCase()
+    const sorted = [...state.files].sort((a, b) => {
+      const ra = recentStack.indexOf(a.path), rb = recentStack.indexOf(b.path)
+      return (ra < 0 ? 999 : ra) - (rb < 0 ? 999 : rb)
+    })
+    const shown = sorted.filter(f => !q || f.label.toLowerCase().includes(q)).slice(0, 12)
+    results.innerHTML = ''
+    if (!shown.length) {
+      results.innerHTML = '<div class="palette-empty">没有匹配的笔记</div>'
+      return
+    }
+    for (const f of shown) {
+      const b = document.createElement('button')
+      b.className = 'palette-item'
+      const recent = recentStack.indexOf(f.path) >= 0 && recentStack.indexOf(f.path) < 3
+      b.innerHTML = `<span class="pi-label"></span>${recent ? '<span class="pi-hint">最近</span>' : ''}`
+      ;(b.querySelector('.pi-label') as HTMLElement).textContent = f.label
+      b.onclick = () => { closeSwitch(); void openFile(f) }
+      results.appendChild(b)
+    }
+  }
+  input.addEventListener('input', paint)
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      const first = results.querySelector('.palette-item') as HTMLElement | null
+      first?.click()
+    } else if (e.key === 'Escape') closeSwitch()
+  })
+  input.focus()
+  paint()
+}
+
+function closeSwitch() {
+  $('#switch-modal')?.remove()
+}
 
 function openPalette() {
   if ($('#palette-overlay')) return
@@ -982,6 +1267,10 @@ window.addEventListener('keydown', e => {
     e.preventDefault(); setView('split')
   } else if (mod && e.key === '3') {
     e.preventDefault(); setView('preview')
+  } else if (mod && e.shiftKey && (e.key === 'f' || e.key === 'F')) {
+    e.preventDefault(); openSearch()
+  } else if (mod && (e.key === 'p' || e.key === 'P')) {
+    e.preventDefault(); openQuickSwitch()
   }
 })
 

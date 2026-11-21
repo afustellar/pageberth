@@ -147,6 +147,19 @@ ipcMain.handle('ink:renameFile', (_e, p: string, newName: string) => {
   }
 })
 
+ipcMain.handle('ink:writeBinary', async (_e, dir: string, name: string, data: Uint8Array) => {
+  try {
+    const safe = name.replace(/[^A-Za-z0-9._-]/g, '-')
+    const assetsDir = path.join(dir, 'assets')
+    if (!fs.existsSync(assetsDir)) fs.mkdirSync(assetsDir, { recursive: true })
+    const p = path.join(assetsDir, safe)
+    fs.writeFileSync(p, Buffer.from(data))
+    return { ok: true, path: p }
+  } catch (err: any) {
+    return { ok: false, error: String(err?.message || err) }
+  }
+})
+
 ipcMain.handle('ink:exportFile', async (_e, defaultName: string, html: string) => {
   if (!win) return null
   const r = await dialog.showSaveDialog(win, {

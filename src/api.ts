@@ -2,6 +2,7 @@ export interface InkwellApi {
   isElectron: boolean
   pickFolder(): Promise<string | null>
   openFileDialog?(): Promise<{ path: string; content: string } | null>
+  writeBinary?(dir: string, name: string, data: Uint8Array): Promise<{ ok: boolean; path?: string; error?: string }>
   readDir(dir: string): Promise<{ files: string[]; folders: string[] } | null>
   readFile(p: string): Promise<string | null>
   writeFile(p: string, content: string): Promise<boolean>
@@ -35,6 +36,20 @@ const webApi: InkwellApi = {
     }
     lsSet('lastVault', name)
     return name
+  },
+
+  async writeBinary(dir: string, name: string, data: Uint8Array) {
+    // web fallback: base64 data URL in localStorage (small images only)
+    try {
+      let bin = ''
+      for (const b of data) bin += String.fromCharCode(b)
+      const b64 = btoa(bin)
+      const key = 'vault:' + dir + '/assets/' + name
+      lsSet(key, JSON.stringify({ dataUrl: 'data:image/png;base64,' + b64 }))
+      return { ok: true, path: key }
+    } catch (e) {
+      return { ok: false, error: String(e) }
+    }
   },
 
   async openFileDialog() {
