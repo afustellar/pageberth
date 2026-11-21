@@ -9,6 +9,8 @@ export interface InkwellApi {
   renameFile(p: string, newName: string): Promise<{ ok: boolean; path?: string; error?: string }>
   exportFile(defaultName: string, html: string): Promise<string | null>
   exportPdf(html: string): Promise<string | null>
+  winControl?(action: 'minimize' | 'maximize' | 'close'): void
+  isMaximized?(): Promise<boolean>
 }
 
 function lsGet(key: string): string | null {

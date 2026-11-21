@@ -27,7 +27,22 @@ const $ = <T extends HTMLElement>(sel: string) => document.querySelector(sel) as
 
 const isMac = /Mac/i.test(navigator.platform || navigator.userAgent)
 const MOD = isMac ? '⌘' : 'Ctrl'
-const PALETTE_ICON = isMac ? '⌘' : '⌕'
+const isWinElectron = api.isElectron && !isMac
+
+/* Unified icon set: 16px inline SVG, stroke = currentColor, 1.6px round caps. */
+const I = (name: string, label: string) =>
+  `<svg class="i" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name]}</svg><span class="sr-only">${label}</span>`
+
+const ICONS: Record<string, string> = {
+  outline: '<path d="M4 6h16M4 12h10M4 18h13"/>',
+  typewriter: '<rect x="4" y="14" width="16" height="5" rx="1.5"/><path d="M12 14V6M9 9l3-3 3 3"/>',
+  palette: '<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>',
+  sun: '<circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.6M12 18.9v2.6M2.5 12h2.6M18.9 12h2.6M5 5l1.8 1.8M17.2 17.2L19 19M19 5l-1.8 1.8M6.8 17.2L5 19"/>',
+  moon: '<path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"/>',
+  graph: '<circle cx="5.5" cy="6" r="2.4"/><circle cx="18.5" cy="5" r="2.4"/><circle cx="16.5" cy="18.5" r="2.4"/><path d="M7.5 7.2l9-1.7M17.6 7.2l-1.4 9M7.2 8.1l7.6 8.5"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  logo: '<path d="M12 3l4.2 6.3c0 4.2-1.6 7-4.2 12.7-2.6-5.7-4.2-8.5-4.2-12.7z"/><circle cx="12" cy="11" r="1.6"/><path d="M12 12.8V19"/>'
+}
 
 const state = {
   vault: null as string | null,
@@ -51,6 +66,7 @@ root.innerHTML = `
 <div id="app-root">
   <header class="topbar">
     ${isMac ? '<div class="traffic-dots"><span class="dot-close"></span><span class="dot-min"></span><span class="dot-max"></span></div>' : ''}
+    <span class="brand"><svg viewBox="0 0 512 512" width="18" height="18" aria-hidden="true"><rect width="512" height="512" rx="112" fill="#D85A30"/><g fill="none" stroke="#FFF" stroke-width="21" stroke-linecap="round" stroke-linejoin="round" transform="translate(256 262) scale(14) translate(-12 -13)"><path d="M12 3l4 6c0 4-1.5 6.5-4 12-2.5-5.5-4-8-4-12z"/><circle cx="12" cy="11.4" r="1.5"/><path d="M12 13.2v5.8"/></g></svg></span>
     <span class="app-title">Inkwell</span>
     <button class="vault-name" id="vault-btn" title="打开资料库文件夹">未打开资料库</button>
     <div class="seg" id="view-seg">
@@ -59,19 +75,25 @@ root.innerHTML = `
       <button data-view="preview">预览</button>
     </div>
     <div class="top-actions">
-      <button class="icon-btn" id="outline-btn" title="大纲面板">☰</button>
-      <button class="icon-btn" id="tw-btn" title="打字机专注模式 (${MOD}+J)">⌶</button>
-      <button class="icon-btn" id="cmdk-btn" title="命令面板 (${MOD}+K)">${PALETTE_ICON}</button>
-      <button class="icon-btn" id="theme-btn" title="切换明暗主题">☾</button>
+      <button class="icon-btn" id="outline-btn" title="大纲面板" aria-label="大纲面板">${I('outline', '大纲面板')}</button>
+      <button class="icon-btn" id="tw-btn" title="打字机专注模式 (${MOD}+J)" aria-label="打字机专注模式">${I('typewriter', '打字机专注模式')}</button>
+      <button class="icon-btn" id="cmdk-btn" title="命令面板 (${MOD}+K)" aria-label="命令面板">${I('palette', '命令面板')}</button>
+      <button class="icon-btn" id="theme-btn" title="切换明暗主题" aria-label="切换明暗主题">${I('moon', '切换明暗主题')}</button>
     </div>
+    ${isWinElectron ? `
+    <div class="win-controls">
+      <button class="win-btn" id="win-min" aria-label="最小化" title="最小化"><svg viewBox="0 0 24 24" width="15" height="15" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M5 12h14"/></svg></button>
+      <button class="win-btn" id="win-max" aria-label="最大化" title="最大化"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="5.5" y="5.5" width="13" height="13" rx="1.5"/></svg></button>
+      <button class="win-btn close" id="win-close" aria-label="关闭" title="关闭"><svg viewBox="0 0 24 24" width="15" height="15" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </div>` : ''}
   </header>
   <div class="body">
     <aside class="sidebar" id="sidebar">
       <div class="sidebar-head">
         <span class="label">笔记</span>
         <div class="actions">
-          <button class="icon-btn" id="graph-btn" title="关系图谱">⬡</button>
-          <button class="icon-btn" id="new-btn" title="新建笔记">＋</button>
+          <button class="icon-btn" id="graph-btn" title="关系图谱" aria-label="关系图谱">${I('graph', '关系图谱')}</button>
+          <button class="icon-btn" id="new-btn" title="新建笔记" aria-label="新建笔记">${I('plus', '新建笔记')}</button>
         </div>
       </div>
       <input class="search" id="filter-input" placeholder="搜索笔记…" />
@@ -557,7 +579,7 @@ function closeGraphModal() {
 
 function applyThemeUI() {
   const btn = $('#theme-btn')
-  btn.textContent = state.theme === 'dark' ? '☀' : '☾'
+  btn.innerHTML = I(state.theme === 'dark' ? 'sun' : 'moon', '切换明暗主题')
   document.documentElement.style.colorScheme = state.theme
 }
 
@@ -762,6 +784,18 @@ vaultBtn.addEventListener('click', pickVault)
 $('#open-vault-btn').addEventListener('click', pickVault)
 $('#new-note-btn').addEventListener('click', newNote)
 filterInput.addEventListener('input', renderFileList)
+
+/* ---------- Custom window controls (Windows frameless) ---------- */
+
+if (isWinElectron && api.winControl) {
+  $('#win-min').addEventListener('click', () => api.winControl!('minimize'))
+  $('#win-max').addEventListener('click', () => api.winControl!('maximize'))
+  $('#win-close').addEventListener('click', () => api.winControl!('close'))
+  document.querySelector('.topbar')?.addEventListener('dblclick', e => {
+    if ((e.target as HTMLElement).closest('button, .seg')) return
+    api.winControl!('maximize')
+  })
+}
 
 window.addEventListener('keydown', e => {
   const mod = e.ctrlKey || e.metaKey

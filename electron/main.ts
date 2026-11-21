@@ -5,6 +5,7 @@ import * as path from 'path'
 let win: BrowserWindow | null = null
 
 function createWindow() {
+  const useFrameless = process.platform === 'win32'
   win = new BrowserWindow({
     width: 1240,
     height: 800,
@@ -13,6 +14,13 @@ function createWindow() {
     title: 'Inkwell',
     backgroundColor: '#17161B',
     autoHideMenuBar: true,
+    ...(useFrameless
+      ? {
+          frame: false,
+          titleBarStyle: 'hidden',
+          icon: path.join(__dirname, '..', 'public', 'inkwell.png')
+        }
+      : {}),
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
@@ -36,6 +44,14 @@ function createWindow() {
 
 app.whenReady().then(createWindow)
 app.on('window-all-closed', () => app.quit())
+
+ipcMain.on('ink:winControl', (_e, action: string) => {
+  if (!win) return
+  if (action === 'minimize') win.minimize()
+  else if (action === 'maximize') win.isMaximized() ? win.unmaximize() : win.maximize()
+  else if (action === 'close') win.close()
+})
+ipcMain.handle('ink:isMaximized', () => (win ? win.isMaximized() : false))
 
 ipcMain.handle('ink:pickFolder', async () => {
   if (!win) return null

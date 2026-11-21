@@ -657,3 +657,72 @@ input {
   padding: 0 6px;
   flex-shrink: 0;
 }
+
+/* ---------- Unified icon buttons & window controls ---------- */
+
+.topbar {
+  /* already drag region; keep buttons interactive below */
+  padding-right: 0;
+}
+
+.icon-btn .i {
+  display: block;
+  width: 16px;
+  height: 16px;
+}
+
+.icon-btn {
+  width: 30px;
+  height: 28px;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  margin-right: -2px;
+}
+
+.brand svg { display: block; border-radius: 5px; }
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.win-controls {
+  display: flex;
+  align-items: stretch;
+  align-self: stretch;
+  margin-left: 6px;
+  -webkit-app-region: no-drag;
+}
+
+.win-btn {
+  width: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-muted);
+  border-radius: 0;
+}
+
+.win-btn:hover { background: var(--ink-active); color: var(--ink-fg); }
+.win-btn.close:hover { background: #E81123; color: #fff; }
+
+/* focus visibility (guidelines: never remove outline without replacement) */
+button:focus-visible, input:focus-visible {
+  outline: 2px solid var(--ink-accent);
+  outline-offset: 1px;
+}
+
+.seg button:focus-visible { outline-offset: -2px; }
+
+/* status bar numbers align (guidelines: tabular-nums for numeric readouts) */
+.statusbar { font-variant-numeric: tabular-nums; }

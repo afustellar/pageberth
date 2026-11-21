@@ -10,5 +10,7 @@ contextBridge.exposeInMainWorld('inkwell', {
   deleteFile: (p) => ipcRenderer.invoke('ink:deleteFile', p),
   renameFile: (p, newName) => ipcRenderer.invoke('ink:renameFile', p, newName),
   exportFile: (defaultName, html) => ipcRenderer.invoke('ink:exportFile', defaultName, html),
-  exportPdf: (html) => ipcRenderer.invoke('ink:exportPdf', html)
+  exportPdf: (html) => ipcRenderer.invoke('ink:exportPdf', html),
+  winControl: (action) => ipcRenderer.send('ink:winControl', action),
+  isMaximized: () => ipcRenderer.invoke('ink:isMaximized')
 })
