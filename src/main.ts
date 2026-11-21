@@ -73,7 +73,7 @@ root.innerHTML = `
 <div id="app-root">
   <header class="topbar">
     ${isMac ? '<div class="traffic-dots"><span class="dot-close"></span><span class="dot-min"></span><span class="dot-max"></span></div>' : ''}
-    <span class="brand"><svg viewBox="0 0 512 512" width="18" height="18" aria-hidden="true"><rect width="512" height="512" rx="112" fill="#D85A30"/><path d="M96 380 C 180 372, 300 356, 396 288" fill="none" stroke="#FFFFFF" stroke-width="34" stroke-linecap="round"/><g transform="rotate(-38 300 176)"><path d="M300 96 L342 216 L300 248 L258 216 Z" fill="#FFFFFF"/><circle cx="300" cy="196" r="13" fill="#D85A30"/><path d="M300 209 L300 248" stroke="#D85A30" stroke-width="9" stroke-linecap="round"/></g><path d="M236 300 c 11 17, 17 26, 17 36 a 17 17 0 1 1 -34 0 c 0 -10, 6 -19, 17 -36 z" fill="#FFFFFF"/></svg></span>
+    <span class="brand"><svg viewBox="0 0 512 512" width="18" height="18" aria-hidden="true"><rect width="512" height="512" rx="112" fill="#FFFFFF"/><rect x="16" y="16" width="480" height="480" rx="96" fill="none" stroke="#E4E2DB" stroke-width="8"/><path d="M96 380 C 180 372, 300 356, 396 288" fill="none" stroke="#2C2C2A" stroke-width="34" stroke-linecap="round"/><g transform="rotate(-38 300 176)"><path d="M300 96 L342 216 L300 248 L258 216 Z" fill="#2C2C2A"/><circle cx="300" cy="196" r="13" fill="#FFFFFF"/><path d="M300 209 L300 248" stroke="#FFFFFF" stroke-width="9" stroke-linecap="round"/></g><path d="M236 300 c 11 17, 17 26, 17 36 a 17 17 0 1 1 -34 0 c 0 -10, 6 -19, 17 -36 z" fill="#D85A30"/></svg></span>
     <span class="app-title">Inkwell</span>
     <button class="vault-name" id="vault-btn" title="打开资料库文件夹">未打开资料库</button>
     <div class="seg" id="view-seg">
@@ -963,7 +963,19 @@ function openSettings() {
   for (const [id, a] of Object.entries(ACCENTS)) {
     const b = document.createElement('button')
     b.className = 'set-opt' + (state.accent === id ? ' on' : '')
-    b.innerHTML = '<span class=sw style=ackground: + a.light.accent + ></span>' + a.name + (state.accent === id ? '<span class=set-check>✓</span>' : '')
+    const sw = document.createElement('span')
+    sw.className = 'sw'
+    sw.style.background = a.light.accent
+    b.appendChild(sw)
+    const label = document.createElement('span')
+    label.textContent = a.name
+    b.appendChild(label)
+    if (state.accent === id) {
+      const chk = document.createElement('span')
+      chk.className = 'set-check'
+      chk.textContent = '✓'
+      b.appendChild(chk)
+    }
     b.onclick = () => { setAccent(id as AccentId); closeSettings() }
     accentList.appendChild(b)
   }
