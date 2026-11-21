@@ -948,7 +948,6 @@ function openSettings() {
           ${seg('line', state.lineIdx, ['紧凑', '适中', '宽松'])}
         </div>
       </div>
-      <div class="set-hint">明暗模式：点顶栏 ☾ / ☀ 按钮循环 切换（浅色 → 深色 → 跟随系统）</div>
     </div>`
   wrap.addEventListener('mousedown', e => { if (e.target === wrap) closeSettings() })
   $('#palette-root').appendChild(wrap)
