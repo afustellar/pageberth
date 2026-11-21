@@ -8,7 +8,7 @@ export interface WikiLink {
   alias: string
 }
 
-function scan(src: string, fn: (raw: string) => string | null): string {
+export function mapWiki(src: string, fn: (raw: string) => string | null): string {
   const stash: string[] = []
   // mask fenced code blocks and inline code so links inside them stay untouched
   const masked = src.replace(new RegExp(CODE_SRC, 'g'), m => {
@@ -24,7 +24,7 @@ function scan(src: string, fn: (raw: string) => string | null): string {
 
 export function extractWikiLinks(src: string): WikiLink[] {
   const out: WikiLink[] = []
-  scan(src, raw => {
+  mapWiki(src, raw => {
     const bar = raw.indexOf('|')
     const target = (bar >= 0 ? raw.slice(0, bar) : raw).trim()
     if (!target) return null
@@ -36,7 +36,7 @@ export function extractWikiLinks(src: string): WikiLink[] {
 }
 
 export function wikiToMarkdown(src: string): string {
-  return scan(src, raw => {
+  return mapWiki(src, raw => {
     const bar = raw.indexOf('|')
     const target = (bar >= 0 ? raw.slice(0, bar) : raw).trim()
     if (!target) return null

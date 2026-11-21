@@ -8,5 +8,7 @@ contextBridge.exposeInMainWorld('inkwell', {
   writeFile: (p, content) => ipcRenderer.invoke('ink:writeFile', p, content),
   createFile: (dir, name) => ipcRenderer.invoke('ink:createFile', dir, name),
   deleteFile: (p) => ipcRenderer.invoke('ink:deleteFile', p),
-  renameFile: (p, newName) => ipcRenderer.invoke('ink:renameFile', p, newName)
+  renameFile: (p, newName) => ipcRenderer.invoke('ink:renameFile', p, newName),
+  exportFile: (defaultName, html) => ipcRenderer.invoke('ink:exportFile', defaultName, html),
+  exportPdf: (html) => ipcRenderer.invoke('ink:exportPdf', html)
 })

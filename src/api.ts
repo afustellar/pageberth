@@ -7,6 +7,8 @@ export interface InkwellApi {
   createFile(dir: string, name: string): Promise<{ ok: boolean; path?: string; name?: string; error?: string }>
   deleteFile(p: string): Promise<boolean>
   renameFile(p: string, newName: string): Promise<{ ok: boolean; path?: string; error?: string }>
+  exportFile(defaultName: string, html: string): Promise<string | null>
+  exportPdf(html: string): Promise<string | null>
 }
 
 function lsGet(key: string): string | null {
@@ -83,6 +85,24 @@ const webApi: InkwellApi = {
     lsSet(target, raw)
     try { localStorage.removeItem('inkwell:' + p) } catch { /* ignore */ }
     return { ok: true, path: target }
+  },
+
+  async exportFile(defaultName: string, html: string) {
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(new Blob([html], { type: 'text/html;charset=utf-8' }))
+    a.download = defaultName
+    a.click()
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000)
+    return defaultName
+  },
+
+  async exportPdf(html: string) {
+    // no printToPDF in browsers: open the document and hand it to the system print dialog
+    const w = window.open('', '_blank')
+    if (!w) return null
+    w.document.write(html)
+    w.document.close()
+    return 'print'
   }
 }
 

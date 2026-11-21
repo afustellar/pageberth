@@ -114,3 +114,41 @@ ipcMain.handle('ink:renameFile', (_e, p: string, newName: string) => {
   }
 })
 
+ipcMain.handle('ink:exportFile', async (_e, defaultName: string, html: string) => {
+  if (!win) return null
+  const r = await dialog.showSaveDialog(win, {
+    title: '导出 HTML',
+    defaultPath: defaultName.endsWith('.html') ? defaultName : `${defaultName}.html`,
+    filters: [{ name: 'HTML', extensions: ['html'] }]
+  })
+  if (r.canceled || !r.filePath) return null
+  try {
+    fs.writeFileSync(r.filePath, html, 'utf-8')
+    return r.filePath
+  } catch {
+    return null
+  }
+})
+
+ipcMain.handle('ink:exportPdf', async (_e, html: string) => {
+  if (!win) return null
+  const r = await dialog.showSaveDialog(win, {
+    title: '导出 PDF',
+    defaultPath: '导出.pdf',
+    filters: [{ name: 'PDF', extensions: ['pdf'] }]
+  })
+  if (r.canceled || !r.filePath) return null
+  const printWin = new BrowserWindow({ show: false, webPreferences: { contextIsolation: true, nodeIntegration: false } })
+  try {
+    await printWin.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html))
+    await printWin.webContents.printToPDF({ printBackground: true, margins: { top: 0.6, bottom: 0.6, left: 0.6, right: 0.6 } })
+      .then(buf => fs.promises.writeFile(r.filePath, buf))
+    return r.filePath
+  } catch {
+    return null
+  } finally {
+    printWin.destroy()
+  }
+})
+
+

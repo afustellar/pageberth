@@ -10,6 +10,7 @@ import { wordStat } from './wordstat'
 import { wikiToMarkdown, extractWikiLinks } from './links'
 import { extractHeadings, type Heading } from './outline'
 import { layoutGraph } from './graph'
+import { buildStandaloneHtml } from './export'
 import { EditorView } from '@codemirror/view'
 import { api } from './api'
 
@@ -366,12 +367,63 @@ async function deleteCurrent() {
   await refreshFiles()
 }
 
+async function renameCurrent() {
+  if (!state.current) return
+  const newName = prompt('重命名为（不含扩展名）：', state.current.label)
+  if (!newName || newName.trim() === state.current.label) return
+  if (!editor) return
+  const content = editor.view.state.doc.toString()
+  await api.writeFile(state.current.path, content) // flush pending changes first
+  const r = await api.renameFile(state.current.path, newName.trim())
+  if (!r.ok || !r.path) {
+    alert(r.error || '重命名失败')
+    return
+  }
+  const old = state.current
+  editorCache.delete(old.path)
+  state.current = { path: r.path, name: old.name.replace(/[^/\\]+/, r.path.split(/[\\/]/).pop() || old.name), label: newName.trim() }
+  await refreshFiles(r.path)
+  setSaveState('clean')
+}
+
+async function exportHtml() {
+  if (!state.current || !editor) return
+  const content = editor.view.state.doc.toString()
+  const html = buildStandaloneHtml(state.current.label, content)
+  const where = await api.exportFile(`${state.current.label}.html`, html)
+  if (where) setSaveState('clean')
+}
+
+async function exportPdf() {
+  if (!state.current || !editor) return
+  const content = editor.view.state.doc.toString()
+  const html = buildStandaloneHtml(state.current.label, content)
+  await api.exportPdf(html)
+}
+
 async function pickVault(): Promise<boolean> {
   const v = await api.pickFolder()
   if (!v) return false
   state.vault = v
+  try { localStorage.setItem('inkwell:lastVault', v) } catch { /* ignore */ }
   vaultBtn.textContent = api.isElectron ? v.split(/[\\/]/).pop() || v : v
   vaultBtn.title = v
+  welcomeEl.style.display = 'none'
+  await refreshFiles()
+  return true
+}
+
+/* ---------- Resume last vault ---------- */
+
+async function resumeLastVault(): Promise<boolean> {
+  let last: string | null = null
+  try { last = localStorage.getItem('inkwell:lastVault') } catch { /* ignore */ }
+  if (!last) return false
+  const r = await api.readDir(last)
+  if (!r) return false
+  state.vault = last
+  vaultBtn.textContent = api.isElectron ? last.split(/[\\/]/).pop() || last : last
+  vaultBtn.title = last
   welcomeEl.style.display = 'none'
   await refreshFiles()
   return true
@@ -479,7 +531,12 @@ function commands(): Command[] {
     { id: 'graph', icon: '⬡', label: '查看关系图谱', run: openGraphModal },
     { id: 'folder', icon: '📁', label: '打开资料库文件夹…', run: pickVault }
   ]
-  if (state.current) list.push({ id: 'del', icon: '✕', label: `删除「${state.current.name}」`, run: deleteCurrent })
+  if (state.current) {
+    list.push({ id: 'rename', icon: '✎', label: `重命名「${state.current.label}」`, run: renameCurrent })
+    list.push({ id: 'del', icon: '✕', label: `删除「${state.current.name}」`, run: deleteCurrent })
+    list.push({ id: 'exp-html', icon: '⇥', label: `导出「${state.current.label}」为 HTML`, run: exportHtml })
+    list.push({ id: 'exp-pdf', icon: '⇥', label: `导出「${state.current.label}」为 PDF`, run: exportPdf })
+  }
   for (const f of state.files) {
     list.push({ id: 'note:' + f.path, icon: '•', label: '打开：' + f.label, run: () => openFile(f) })
   }
@@ -636,5 +693,6 @@ ensureEditor()
 updateStatus()
 renderPreview()
 renderOutline()
+void resumeLastVault()
 
 

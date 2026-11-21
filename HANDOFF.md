@@ -96,3 +96,18 @@ npm run build        # 产出 dist/
 - 用户中文交流，风格是"按你的想法做，先给设计再动手"。设计稿已在聊天里确认过，不需要重新征求意见，直接按本文档 §2 执行。
 - 2026-11-20 用户暂停了开发要换电脑继续。交接物 = 本文件 + README.md + 已提交的 git 仓库 + inkwell-handoff-20261120.zip（不含 node_modules）。
 - 新会话第一步：`Read` 本文件 → `git log --oneline` 看进度 → 从 §6 第 1 项（src/main.ts）继续。
+
+## 9. 进度记录（2026-11-21）
+
+路线图 §6 六步全部完成，commit 历史：
+
+1. `a7056cd` — src/main.ts + styles.css UI 壳；命令面板 ⌘K；typewriter 接线；markdown.ts 清占位；electron script + tsconfig + electron-builder 配置
+2. `9878bd2` — 平台自适应：Windows 隐藏 mac 红绿灯、快捷键提示 Ctrl/⌘ 随平台
+3. `af7d4b3` — 双向链接（links.ts）、图谱（graph.ts，零依赖力导向 + SVG）、大纲面板（outline.ts）；修 web api 两个老 bug（readDir 读永不写入的清单、readFile key 双前缀）
+4. 本次 — 导出（export.ts 自包含 HTML，Electron printToPDF 导 PDF；web 降级 = blob 下载 / window.open 打印）、重命名进命令面板、记住上次资料库（lastVault）
+
+新增 API：`InkwellApi.exportFile(defaultName, html)` / `exportPdf(html)`（preload + main IPC `ink:exportFile` / `ink:exportPdf` 已同步）。
+
+验证方式：esbuild 打包单模块跑 node 单测；无头 Electron（show:false）executeJavaScript 做 E2E，结果写 JSON 文件读取。注意：别在主进程 import 渲染进程模块（会炸 `document is not defined` 系统弹窗）。
+
+已知取舍：web 模式导 PDF 走系统打印对话框（浏览器无 printToPDF）；图谱输入依赖 editorCache（打开过/刷新时读过的文件才有内容）；折叠文件夹未做（侧栏只有平铺文件，Electron readDir 已返回 folders 字段，接口留好了）。
