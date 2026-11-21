@@ -24,7 +24,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          rm -f package-lock.json
+          node -e "try { require('fs').unlinkSync('package-lock.json') } catch (e) {}"
           npm install --no-audit --no-fund
 
       - name: Compile main process + frontend
