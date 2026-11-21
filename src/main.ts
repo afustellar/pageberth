@@ -1467,13 +1467,27 @@ window.addEventListener('beforeunload', () => {
 
 /* ---------- Boot ---------- */
 
-state.theme = loadTheme()
+const mode0 = loadThemeMode()
+if (mode0 === 'auto') {
+  state.theme = systemPrefersDark() ? 'dark' : 'light'
+  themeMedia = window.matchMedia('(prefers-color-scheme: dark)')
+  themeMedia.onchange = () => {
+    if ((localStorage.getItem('inkwell:themeMode') || 'auto') !== 'auto') return
+    state.theme = systemPrefersDark() ? 'dark' : 'light'
+    applyTheme(state.theme)
+    applyAccent(state.accent, state.theme)
+    applyThemeUI()
+  }
+} else {
+  state.theme = mode0
+}
+try { localStorage.setItem('inkwell:themeMode', mode0) } catch { /* ignore */ }
 state.accent = loadAccent()
 const typo = loadTypography()
 state.fontIdx = typo.fontIdx
 state.lineIdx = typo.lineIdx
 applyTheme(state.theme)
-  applyAccent(state.accent, state.theme)
+applyAccent(state.accent, state.theme)
 applyTypography()
 applyThemeUI()
 applyView()
