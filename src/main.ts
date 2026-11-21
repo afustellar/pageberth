@@ -2,7 +2,7 @@
    Architecture rule: all platform access goes through `api` (src/api.ts). */
 
 import './styles.css'
-import { applyTheme, loadTheme, type ThemeName } from './theme'
+import { applyTheme, applyHeadingColor, loadTheme, loadHeadingColor, type ThemeName, type HeadingColor } from './theme'
 import { createEditor, type EditorHandle } from './editor'
 import { renderMarkdown } from './markdown'
 import { makeTypewriter } from './typewriter'
@@ -40,6 +40,7 @@ const ICONS: Record<string, string> = {
   sun: '<circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.6M12 18.9v2.6M2.5 12h2.6M18.9 12h2.6M5 5l1.8 1.8M17.2 17.2L19 19M19 5l-1.8 1.8M6.8 17.2L5 19"/>',
   moon: '<path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"/>',
   graph: '<circle cx="5.5" cy="6" r="2.4"/><circle cx="18.5" cy="5" r="2.4"/><circle cx="16.5" cy="18.5" r="2.4"/><path d="M7.5 7.2l9-1.7M17.6 7.2l-1.4 9M7.2 8.1l7.6 8.5"/>',
+  gear: '<circle cx="12" cy="12" r="3.2"/><path d="M12 2.8l1.2 2.7 2.9-.6 1 2.8 2.7 1.2-1.6 2.5 1.6 2.5-2.7 1.2-1 2.8-2.9-.6L12 21.2l-1.2-2.7-2.9.6-1-2.8-2.7-1.2L5.8 12 4.2 9.5l2.7-1.2 1-2.8 2.9.6z"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
   logo: '<path d="M12 3l4.2 6.3c0 4.2-1.6 7-4.2 12.7-2.6-5.7-4.2-8.5-4.2-12.7z"/><circle cx="12" cy="11" r="1.6"/><path d="M12 12.8V19"/>'
 }
@@ -51,6 +52,7 @@ const state = {
   view: (localStorage.getItem('inkwell:view') as ViewMode) || 'split',
   typewriter: false,
   theme: 'light' as ThemeName,
+  heading: 'ink' as HeadingColor,
   dirty: false,
   saveTimer: 0 as unknown as ReturnType<typeof setTimeout>
 }
@@ -66,7 +68,7 @@ root.innerHTML = `
 <div id="app-root">
   <header class="topbar">
     ${isMac ? '<div class="traffic-dots"><span class="dot-close"></span><span class="dot-min"></span><span class="dot-max"></span></div>' : ''}
-    <span class="brand"><svg viewBox="0 0 512 512" width="18" height="18" aria-hidden="true"><rect width="512" height="512" rx="112" fill="#D85A30"/><g fill="none" stroke="#FFF" stroke-width="21" stroke-linecap="round" stroke-linejoin="round" transform="translate(256 262) scale(14) translate(-12 -13)"><path d="M12 3l4 6c0 4-1.5 6.5-4 12-2.5-5.5-4-8-4-12z"/><circle cx="12" cy="11.4" r="1.5"/><path d="M12 13.2v5.8"/></g></svg></span>
+    <span class="brand"><svg viewBox="0 0 512 512" width="18" height="18" aria-hidden="true"><rect width="512" height="512" rx="112" fill="#D85A30"/><path d="M150 210 h212 l-26 170 a40 40 0 0 1 -40 34 h-80 a40 40 0 0 1 -40 -34 z" fill="#FFFFFF"/><ellipse cx="256" cy="210" rx="106" ry="26" fill="#FFFFFF"/><ellipse cx="256" cy="210" rx="76" ry="17" fill="#B4451F"/><ellipse cx="256" cy="212" rx="60" ry="12" fill="#2C2C2A"/><path d="M320 92 l30 118 -44 -22 z" fill="#2C2C2A" stroke="#2C2C2A" stroke-width="10" stroke-linejoin="round"/><path d="M262 300 c14 22 22 34 22 46 a22 22 0 1 1 -44 0 c0 -12 8 -24 22 -46 z" fill="#2C2C2A"/></svg></span>
     <span class="app-title">Inkwell</span>
     <button class="vault-name" id="vault-btn" title="打开资料库文件夹">未打开资料库</button>
     <div class="seg" id="view-seg">
@@ -79,6 +81,7 @@ root.innerHTML = `
       <button class="icon-btn" id="tw-btn" title="打字机专注模式 (${MOD}+J)" aria-label="打字机专注模式">${I('typewriter', '打字机专注模式')}</button>
       <button class="icon-btn" id="cmdk-btn" title="命令面板 (${MOD}+K)" aria-label="命令面板">${I('palette', '命令面板')}</button>
       <button class="icon-btn" id="theme-btn" title="切换明暗主题" aria-label="切换明暗主题">${I('moon', '切换明暗主题')}</button>
+      <button class="icon-btn" id="settings-btn" title="设置" aria-label="设置">${I('gear', '设置')}</button>
     </div>
     ${isWinElectron ? `
     <div class="win-controls">
@@ -585,8 +588,55 @@ function applyThemeUI() {
 
 function toggleTheme() {
   state.theme = state.theme === 'dark' ? 'light' : 'dark'
-  applyTheme(state.theme)
+  applyTheme(state.theme, state.heading)
   applyThemeUI()
+}
+
+/* ---------- Settings ---------- */
+
+function setHeadingColor(c: HeadingColor) {
+  state.heading = c
+  try { localStorage.setItem('inkwell:headingColor', c) } catch { /* ignore */ }
+  applyHeadingColor(c, state.theme)
+  renderPreview()
+}
+
+function openSettings() {
+  if ($('#settings-modal')) return
+  const wrap = document.createElement('div')
+  wrap.id = 'settings-modal'
+  wrap.className = 'modal-overlay'
+  const opt = (id: string, label: string, swatch: string, cur: boolean) =>
+    `<button class="set-opt${cur ? ' on' : ''}" data-hc="${id}"><span class="sw" style="background:${swatch}"></span>${label}${cur ? '<span class="set-check">✓</span>' : ''}</button>`
+  const hc = state.heading
+  wrap.innerHTML = `
+    <div class="modal settings-modal">
+      <div class="modal-head">
+        <span class="label">设置</span>
+        <button class="icon-btn" id="settings-close" title="关闭" aria-label="关闭">✕</button>
+      </div>
+      <div class="set-group">
+        <div class="set-label">标题颜色</div>
+        <div class="set-list">
+          ${opt('ink', '墨黑（默认）', '#242320', hc === 'ink')}
+          ${opt('violet', '紫罗兰（原设计稿）', '#534AB7', hc === 'violet')}
+          ${opt('coral', '珊瑚', '#B4451F', hc === 'coral')}
+        </div>
+      </div>
+    </div>`
+  wrap.addEventListener('mousedown', e => { if (e.target === wrap) closeSettings() })
+  $('#palette-root').appendChild(wrap)
+  $('#settings-close').addEventListener('click', closeSettings)
+  wrap.querySelectorAll<HTMLButtonElement>('.set-opt').forEach(b => {
+    b.addEventListener('click', () => {
+      setHeadingColor(b.dataset.hc as HeadingColor)
+      closeSettings()
+    })
+  })
+}
+
+function closeSettings() {
+  $('#settings-modal')?.remove()
 }
 
 /* ---------- Typewriter ---------- */
@@ -656,6 +706,7 @@ function commands(): Command[] {
     { id: 'save', icon: '⟳', label: '保存当前笔记', hint: `${MOD}+S`, run: saveCurrent },
     { id: 'outline', icon: '☰', label: '大纲面板：开/关', run: () => { outlineOpen = !outlineOpen; applyOutline() } },
     { id: 'graph', icon: '⬡', label: '查看关系图谱', run: openGraphModal },
+    { id: 'settings', icon: '⚙', label: '打开设置', run: openSettings },
     { id: 'folder', icon: '📁', label: '打开资料库文件夹…', run: pickVault }
   ]
   if (state.current) {
@@ -775,6 +826,7 @@ $('#view-seg').addEventListener('click', e => {
 })
 
 $('#theme-btn').addEventListener('click', toggleTheme)
+$('#settings-btn').addEventListener('click', openSettings)
 $('#outline-btn').addEventListener('click', () => { outlineOpen = !outlineOpen; applyOutline() })
 $('#graph-btn').addEventListener('click', openGraphModal)
 $('#tw-btn').addEventListener('click', () => setTypewriter(!state.typewriter))
@@ -824,6 +876,8 @@ window.addEventListener('beforeunload', () => {
 /* ---------- Boot ---------- */
 
 state.theme = loadTheme()
+state.heading = loadHeadingColor()
+applyTheme(state.theme, state.heading)
 applyThemeUI()
 applyView()
 applyOutline()
