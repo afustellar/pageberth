@@ -56,8 +56,6 @@ npm run electron:build  # 产出安装包到 release/
 
 技术栈：Electron · Vite · TypeScript（无框架，原生 DOM）· CodeMirror 6 · marked + DOMPurify
 
-接手开发前请读 [HANDOFF.md](./HANDOFF.md) —— 完整的产品决策、架构约定与路线图。
-
 ## 设计原则
 
 **手感 > 专注 > 关联**，功能宁少勿滥。暖纸白界面 + 可换主题色，拒绝冷冰冰的科技蓝；编辑器语法高亮遵循 GitHub 惯例，克制中性。

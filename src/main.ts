@@ -1051,7 +1051,16 @@ function openSettings() {
     for (let i = 0; i < 3; i++) if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) - (pb[i] || 0)
     return 0
   }
-  updState.textContent = t('curVersion', { v: '…' })
+  updState.textContent = '…'
+  // silent version fill on open (no click needed)
+  const verCache = (openSettings as any).__verCache as string | undefined
+  if (api.checkUpdate && !verCache) {
+    api.checkUpdate().then(r => {
+      ;(openSettings as any).__verCache = r.current || ''
+      if (r.current) updState.textContent = t('curVersion', { v: 'v' + r.current })
+      if (r.version && r.current && r.version === r.current) updBtn.textContent = t('checkUpdate')
+    }).catch(() => {})
+  }
   updBtn.addEventListener('click', async () => {
     if (!api.checkUpdate) return
     updBtn.disabled = true
@@ -1082,7 +1091,7 @@ function openSettings() {
       // if download finished before we got here, onUpdateReady may already have fired; poll fallback
       setTimeout(() => { if (updBtn.disabled) { updBtn.textContent = t('restartInstall'); updBtn.disabled = false; updBtn.onclick = () => api.installUpdate?.() } }, 8000)
     } else {
-      updState.textContent = (r.current ? t('curVersion', { v: 'v' + r.current }) + ' · ' : '') + t('latest')
+      updState.textContent = t('latest')
       updBtn.textContent = t('checkUpdate')
       updBtn.disabled = false
     }

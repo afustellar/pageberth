@@ -6,3 +6,5 @@ dist/
 release/
 electron/main.js
 
+*.pdf
+.artifacts.json
