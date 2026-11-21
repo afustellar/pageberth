@@ -125,9 +125,61 @@ ipcMain.handle('ink:createFile', (_e, dir: string, name: string) => {
   }
 })
 
+// soft delete: move into <vault>/.trash/ instead of unlinking (recyclable)
 ipcMain.handle('ink:deleteFile', (_e, p: string) => {
   try {
-    fs.unlinkSync(p)
+    const vault = path.dirname(p)
+    const trash = path.join(vault, '.trash')
+    if (!fs.existsSync(trash)) fs.mkdirSync(trash, { recursive: true })
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-')
+    const dest = path.join(trash, `${stamp}-${path.basename(p)}`)
+    fs.renameSync(p, dest)
+    return true
+  } catch {
+    return false
+  }
+})
+
+// list trash contents (newest first)
+ipcMain.handle('ink:listTrash', (_e, vault: string) => {
+  try {
+    const trash = path.join(vault, '.trash')
+    if (!fs.existsSync(trash)) return []
+    return fs.readdirSync(trash)
+      .filter(f => f.endsWith('.md') || f.endsWith('.markdown') || f.endsWith('.txt'))
+      .sort()
+      .reverse()
+  } catch {
+    return []
+  }
+})
+
+// restore: move a trash file back to the vault root
+ipcMain.handle('ink:restoreTrash', (_e, vault: string, name: string) => {
+  try {
+    const trash = path.join(vault, '.trash')
+    const src = path.join(trash, name)
+    // strip the timestamp prefix (yyyy-mm-ddThh-mm-ss-mmm-)
+    const orig = name.replace(/^\d{4}-\d{2}-\d{2}T[\d-]+-/, '')
+    let dest = path.join(vault, orig)
+    let i = 1
+    while (fs.existsSync(dest)) {
+      const ext = path.extname(orig)
+      dest = path.join(vault, `${orig.slice(0, -ext.length || undefined)}-${i}${ext}`)
+      i++
+    }
+    fs.renameSync(src, dest)
+    return { ok: true, path: dest }
+  } catch (err: any) {
+    return { ok: false, error: String(err?.message || err) }
+  }
+})
+
+// permanently empty the trash
+ipcMain.handle('ink:emptyTrash', (_e, vault: string) => {
+  try {
+    const trash = path.join(vault, '.trash')
+    if (fs.existsSync(trash)) fs.rmSync(trash, { recursive: true })
     return true
   } catch {
     return false

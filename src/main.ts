@@ -117,7 +117,7 @@ root.innerHTML = `
       </aside>
       <div class="welcome" id="welcome">
         <h2>Inkwell</h2>
-        <p>为长文而生的本机写作间</p>
+        <p>你的笔记，只属于这台电脑</p>
         <div class="row">
           <button id="new-note-btn">新建笔记</button>
           <button id="open-vault-btn" class="ghost">打开文件夹</button>
@@ -492,8 +492,8 @@ function renderFileList() {
     row.appendChild(b)
     const del = document.createElement('button')
     del.className = 'file-del'
-    del.setAttribute('aria-label', `删除 ${f.label}`)
-    del.title = '删除'
+    del.setAttribute('aria-label', `移入回收站 ${f.label}`)
+    del.title = '移入回收站'
     del.textContent = '✕'
     del.onclick = async e => {
       e.stopPropagation()
@@ -502,10 +502,10 @@ function renderFileList() {
         else { state.files = state.files; /* unreachable: scratch is always current */ }
         return
       }
-      if (!confirm(`删除「${f.name}」？此操作不可撤销。`)) return
+      if (!confirm(`把「${f.name}」移入回收站？`)) return
       const wasCurrent = state.current?.path === f.path
       const ok = await api.deleteFile(f.path)
-      if (!ok) { alert('删除失败'); return }
+      if (!ok) { alert('移入回收站失败'); return }
       editorCache.delete(f.path)
       if (wasCurrent) {
         state.current = null
@@ -634,10 +634,10 @@ async function deleteCurrent() {
     renderOutline()
     return
   }
-  if (!confirm(`删除「${state.current.name}」？此操作不可撤销。`)) return
+  if (!confirm(`把「${state.current.name}」移入回收站？`)) return
   const ok = await api.deleteFile(state.current.path)
   if (!ok) {
-    alert('删除失败')
+    alert('移入回收站失败')
     return
   }
   editorCache.delete(state.current.path)
@@ -908,6 +908,66 @@ function setLineIdx(i: number) {
   applyTypography()
 }
 
+/* ---------- Trash manager ---------- */
+
+async function openTrash() {
+  if ($('#trash-modal')) return
+  if (!state.vault) {
+    const ok = await pickVault()
+    if (!ok) return
+  }
+  const wrap = document.createElement('div')
+  wrap.id = 'trash-modal'
+  wrap.className = 'modal-overlay'
+  wrap.innerHTML = `
+    <div class="modal search-modal">
+      <div class="modal-head">
+        <span class="label">回收站</span>
+        <div class="modal-actions">
+          <button class="ghost-btn" id="trash-empty">清空回收站</button>
+          <button class="icon-btn" id="trash-close" title="关闭" aria-label="关闭">✕</button>
+        </div>
+      </div>
+      <div class="palette-list" id="trash-list"></div>
+    </div>`
+  wrap.addEventListener('mousedown', e => { if (e.target === wrap) closeTrash() })
+  $('#palette-root').appendChild(wrap)
+  $('#trash-close').addEventListener('click', closeTrash)
+  const list = $('#trash-list')
+  const files = api.listTrash ? await api.listTrash(state.vault!) : []
+  if (!files.length) {
+    list.innerHTML = '<div class="palette-empty">回收站是空的</div>'
+  } else {
+    for (const name of files) {
+      const row = document.createElement('div')
+      row.className = 'trash-row'
+      const label = document.createElement('span')
+      label.className = 'sh-file'
+      label.textContent = name.replace(/^\\d{4}-\\d{2}-\\d{2}T[\\d-]+-/, '')
+      row.appendChild(label)
+      const restore = document.createElement('button')
+      restore.className = 'ghost-btn'
+      restore.textContent = '恢复'
+      restore.onclick = async () => {
+        const r = api.restoreTrash ? await api.restoreTrash(state.vault!, name) : { ok: false }
+        if (r.ok) { closeTrash(); await refreshFiles() }
+        else alert('恢复失败')
+      }
+      row.appendChild(restore)
+      list.appendChild(row)
+    }
+  }
+  $('#trash-empty').addEventListener('click', async () => {
+    if (!confirm('永久清空回收站？此操作不可撤销。')) return
+    if (api.emptyTrash) await api.emptyTrash(state.vault!)
+    closeTrash()
+  })
+}
+
+function closeTrash() {
+  $('#trash-modal')?.remove()
+}
+
 function openSettings() {
   if ($('#settings-modal')) return
   const wrap = document.createElement('div')
@@ -1042,6 +1102,7 @@ function commands(): Command[] {
     { id: 'graph', icon: '⬡', label: '查看关系图谱', run: openGraphModal },
     { id: 'search', icon: '⌕', label: '全文搜索', hint: `${MOD}+⇧F`, run: openSearch },
     { id: 'switch', icon: '⇄', label: '快速切换笔记', hint: `${MOD}+P`, run: openQuickSwitch },
+    { id: 'trash', icon: '🗑', label: '回收站', run: () => void openTrash() },
     { id: 'settings', icon: '⚙', label: '打开设置', run: openSettings },
     { id: 'folder', icon: '📁', label: '打开资料库文件夹…', run: pickVault }
   ]
@@ -1143,9 +1204,9 @@ function fileContextEntries(f: FileMeta): MenuEntry[] {
         void (async () => {
           if (state.current?.path === f.path) await deleteCurrent()
           else {
-            if (!confirm(`删除「${f.name}」？此操作不可撤销。`)) return
+            if (!confirm(`把「${f.name}」移入回收站？`)) return
             const ok = await api.deleteFile(f.path)
-            if (!ok) { alert('删除失败'); return }
+            if (!ok) { alert('移入回收站失败'); return }
             editorCache.delete(f.path)
             await refreshFiles()
           }

@@ -11,6 +11,9 @@ export interface InkwellApi {
   renameFile(p: string, newName: string): Promise<{ ok: boolean; path?: string; error?: string }>
   exportFile(defaultName: string, html: string): Promise<string | null>
   exportPdf(html: string): Promise<string | null>
+  listTrash?(vault: string): Promise<string[]>
+  restoreTrash?(vault: string, name: string): Promise<{ ok: boolean; path?: string; error?: string }>
+  emptyTrash?(vault: string): Promise<boolean>
   winControl?(action: 'minimize' | 'maximize' | 'close'): void
   isMaximized?(): Promise<boolean>
 }
@@ -106,8 +109,44 @@ const webApi: InkwellApi = {
   async deleteFile(p: string) {
     const raw = lsGet(p)
     if (!raw) return false
+    // web recycle bin
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-')
+    const name = p.split('/').pop() || 'file.md'
+    lsSet('trash/' + stamp + '-' + name, raw)
     try { localStorage.removeItem('inkwell:' + p) } catch { return false }
     return true
+  },
+
+  async listTrash(vault: string) {
+    try {
+      const out: string[] = []
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i)
+        if (k && k.startsWith('inkwell:trash/')) out.push(k.slice('inkwell:trash/'.length))
+      }
+      return out.sort().reverse()
+    } catch { return [] }
+  },
+
+  async restoreTrash(vault: string, name: string) {
+    const raw = lsGet('trash/' + name)
+    if (!raw) return { ok: false, error: '不存在' }
+    const orig = name.replace(/^d{4}-d{2}-d{2}T[d-]+-/, '')
+    lsSet('vault:' + vault + '/files/' + orig, raw)
+    try { localStorage.removeItem('inkwell:trash/' + name) } catch { }
+    return { ok: true, path: 'vault:' + vault + '/files/' + orig }
+  },
+
+  async emptyTrash() {
+    try {
+      const kill: string[] = []
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i)
+        if (k && k.startsWith('inkwell:trash/')) kill.push(k)
+      }
+      kill.forEach(k => localStorage.removeItem(k))
+      return true
+    } catch { return false }
   },
 
   async renameFile(p: string, newName: string) {
