@@ -81,8 +81,8 @@ const light: Record<string, string> = {
   mdH: '#242320',
   mdStrong: '#0F6E56',
   mdPunct: '#B4B2A9',
-  mdCodeBg: '#FAEEDA',
-  mdCodeFg: '#633806',
+  mdCodeBg: '#F1F0EC',
+  mdCodeFg: '#2C2C2A',
   mdLink: '#185FA5',
   mdQuote: '#5F5E5A'
 }
@@ -100,8 +100,8 @@ const dark: Record<string, string> = {
   mdH: '#F2F0EC',
   mdStrong: '#5DCAA5',
   mdPunct: '#888780',
-  mdCodeBg: '#2B2718',
-  mdCodeFg: '#FAC775',
+  mdCodeBg: '#27262D',
+  mdCodeFg: '#E9E7E3',
   mdLink: '#85B7EB',
   mdQuote: '#B4B2A9'
 }

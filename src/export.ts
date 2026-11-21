@@ -47,8 +47,8 @@ export function buildStandaloneHtml(title: string, markdownSrc: string): string 
     --accent: ${c('accent', '#D85A30')};
     --h: ${c('mdH', '#242320')};
     --strong: ${c('mdStrong', '#0F6E56')};
-    --codebg: ${c('mdCodeBg', '#FAEEDA')};
-    --codefg: ${c('mdCodeFg', '#633806')};
+    --codebg: ${c('mdCodeBg', '#F1F0EC')};
+    --codefg: ${c('mdCodeFg', '#2C2C2A')};
     --link: ${c('mdLink', '#185FA5')};
     --quote: ${c('mdQuote', '#5F5E5A')};
     color-scheme: ${document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light'};
