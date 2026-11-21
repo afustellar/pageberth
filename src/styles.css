@@ -954,3 +954,14 @@ button:focus-visible, input:focus-visible {
 .set-cols + .set-cols { margin-top: 16px; }
 .set-cols .set-label { margin-bottom: 8px; }
 .settings-modal { padding-bottom: 16px; }
+
+/* accent swatches in a single horizontal row */
+#accent-list {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+
+#accent-list .sw-pick { margin: 0; }
