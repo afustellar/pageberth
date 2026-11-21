@@ -160,7 +160,7 @@ ipcMain.handle('ink:restoreTrash', (_e, vault: string, name: string) => {
     const trash = path.join(vault, '.trash')
     const src = path.join(trash, name)
     // strip the timestamp prefix (yyyy-mm-ddThh-mm-ss-mmm-)
-    const orig = name.replace(/^\d{4}-\d{2}-\d{2}T[\d-]+-/, '')
+    const orig = name.replace(/^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z-/, '')
     let dest = path.join(vault, orig)
     let i = 1
     while (fs.existsSync(dest)) {
