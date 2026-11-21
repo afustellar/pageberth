@@ -13,7 +13,7 @@ const STR = {
     backlinks: '反向链接', outlineList: '大纲',
     draft: '草稿', trashTitle: '移入回收站', restore: '恢复',
     trashEmpty: '回收站是空的', trash: '回收站', emptyTrash: '清空回收站',
-    openVault: '打开文件夹', openFile: '打开文件', welcomeSlogan: '安静写作，笔记留在本机',
+    openVault: '打开文件夹', openFile: '打开文件', welcomeSlogan: '写下来，就留在这台电脑上',
     hintPalette: '打开命令面板', words: '字', minutes: '约 {n} 分钟',
     saved: '已保存', editing: '编辑中…', ready: '就绪',
     daily: '今日 +{n} 字', vault: '未打开资料库', openVaultTitle: '打开资料库文件夹',
