@@ -1,0 +1,116 @@
+﻿import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import * as fs from 'fs'
+import * as path from 'path'
+
+let win: BrowserWindow | null = null
+
+function createWindow() {
+  win = new BrowserWindow({
+    width: 1240,
+    height: 800,
+    minWidth: 860,
+    minHeight: 560,
+    title: 'Inkwell',
+    backgroundColor: '#17161B',
+    autoHideMenuBar: true,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.cjs'),
+      contextIsolation: true,
+      nodeIntegration: false
+    }
+  })
+  const devUrl = process.env.INKWELL_DEV_URL
+  const distIndex = path.join(__dirname, '..', 'dist', 'index.html')
+  if (devUrl) {
+    win.loadURL(devUrl)
+  } else if (fs.existsSync(distIndex)) {
+    win.loadFile(distIndex)
+  } else {
+    win.loadFile(path.join(__dirname, 'index.html'))
+  }
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    shell.openExternal(url)
+    return { action: 'deny' }
+  })
+}
+
+app.whenReady().then(createWindow)
+app.on('window-all-closed', () => app.quit())
+
+ipcMain.handle('ink:pickFolder', async () => {
+  if (!win) return null
+  const r = await dialog.showOpenDialog(win, { properties: ['openDirectory'] })
+  return r.canceled ? null : r.filePaths[0]
+})
+
+ipcMain.handle('ink:readDir', (_e, dir: string) => {
+  try {
+    const entries = fs.readdirSync(dir, { withFileTypes: true })
+    const files = entries
+      .filter(e => e.isFile() && /\.(md|markdown|txt)$/i.test(e.name))
+      .map(e => e.name)
+      .sort((a, b) => a.localeCompare(b, 'zh'))
+    const folders = entries
+      .filter(e => e.isDirectory() && !e.name.startsWith('.'))
+      .map(e => e.name)
+      .sort((a, b) => a.localeCompare(b, 'zh'))
+    return { files, folders }
+  } catch {
+    return null
+  }
+})
+
+ipcMain.handle('ink:readFile', (_e, p: string) => {
+  try {
+    const stat = fs.statSync(p)
+    if (!stat.isFile() || stat.size > 5 * 1024 * 1024) return null
+    return fs.readFileSync(p, 'utf-8')
+  } catch {
+    return null
+  }
+})
+
+ipcMain.handle('ink:writeFile', (_e, p: string, content: string) => {
+  try {
+    fs.writeFileSync(p, content, 'utf-8')
+    return true
+  } catch {
+    return false
+  }
+})
+
+ipcMain.handle('ink:createFile', (_e, dir: string, name: string) => {
+  try {
+    const safe = name.replace(/[\\/:*?"<>|]/g, '-').trim()
+    const full = `${safe}.md`.replace(/\.md\.md$/i, '.md')
+    const p = path.join(dir, full)
+    if (fs.existsSync(p)) return { ok: false, error: '同名文件已存在' }
+    fs.writeFileSync(p, `# ${safe}\n\n`, 'utf-8')
+    return { ok: true, path: p, name: full }
+  } catch (err: any) {
+    return { ok: false, error: String(err?.message || err) }
+  }
+})
+
+ipcMain.handle('ink:deleteFile', (_e, p: string) => {
+  try {
+    fs.unlinkSync(p)
+    return true
+  } catch {
+    return false
+  }
+})
+
+ipcMain.handle('ink:renameFile', (_e, p: string, newName: string) => {
+  try {
+    const safe = newName.replace(/[\\/:*?"<>|]/g, '-').trim()
+    const ext = path.extname(p) || '.md'
+    const target = path.join(path.dirname(p), `${safe}${ext}`)
+    if (fs.existsSync(target)) return { ok: false, error: '同名文件已存在' }
+    fs.renameSync(p, target)
+    return { ok:true, path: target }
+  } catch (err: any) {
+    return { ok: false, error: String(err?.message || err) }
+  }
+})
+
