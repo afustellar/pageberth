@@ -19,6 +19,10 @@ interface FileMeta {
 
 const $ = <T extends HTMLElement>(sel: string) => document.querySelector(sel) as T
 
+const isMac = /Mac/i.test(navigator.platform || navigator.userAgent)
+const MOD = isMac ? '⌘' : 'Ctrl'
+const PALETTE_ICON = isMac ? '⌘' : '⌕'
+
 const state = {
   vault: null as string | null,
   files: [] as FileMeta[],
@@ -37,7 +41,7 @@ const root = document.getElementById('app')!
 root.innerHTML = `
 <div id="app-root">
   <header class="topbar">
-    <div class="traffic-dots"><span class="dot-close"></span><span class="dot-min"></span><span class="dot-max"></span></div>
+    ${isMac ? '<div class="traffic-dots"><span class="dot-close"></span><span class="dot-min"></span><span class="dot-max"></span></div>' : ''}
     <span class="app-title">Inkwell</span>
     <button class="vault-name" id="vault-btn" title="打开资料库文件夹">未打开资料库</button>
     <div class="seg" id="view-seg">
@@ -46,8 +50,8 @@ root.innerHTML = `
       <button data-view="preview">预览</button>
     </div>
     <div class="top-actions">
-      <button class="icon-btn" id="tw-btn" title="打字机专注模式 (⌘J)">⌶</button>
-      <button class="icon-btn" id="cmdk-btn" title="命令面板 (⌘K)">⌘</button>
+      <button class="icon-btn" id="tw-btn" title="打字机专注模式 (${MOD}+J)">⌶</button>
+      <button class="icon-btn" id="cmdk-btn" title="命令面板 (${MOD}+K)">${PALETTE_ICON}</button>
       <button class="icon-btn" id="theme-btn" title="切换明暗主题">☾</button>
     </div>
   </header>
@@ -70,7 +74,7 @@ root.innerHTML = `
           <button id="open-vault-btn">打开文件夹</button>
           <button id="new-note-btn">新建笔记</button>
         </div>
-        <p class="hint">按 <kbd>Ctrl</kbd>+<kbd>K</kbd> 打开命令面板</p>
+        <p class="hint">按 <kbd>${MOD}</kbd>+<kbd>K</kbd> 打开命令面板</p>
       </div>
     </main>
   </div>
@@ -302,12 +306,12 @@ interface Command {
 function commands(): Command[] {
   const list: Command[] = [
     { id: 'new', icon: '＋', label: '新建笔记', run: newNote },
-    { id: 've', icon: '✎', label: '视图：仅编辑', hint: '⌃1', run: () => setView('edit') },
-    { id: 'vs', icon: '◫', label: '视图：分屏', hint: '⌃2', run: () => setView('split') },
-    { id: 'vp', icon: '▷', label: '视图：仅预览', hint: '⌃3', run: () => setView('preview') },
+    { id: 've', icon: '✎', label: '视图：仅编辑', hint: `${MOD}+1`, run: () => setView('edit') },
+    { id: 'vs', icon: '◫', label: '视图：分屏', hint: `${MOD}+2`, run: () => setView('split') },
+    { id: 'vp', icon: '▷', label: '视图：仅预览', hint: `${MOD}+3`, run: () => setView('preview') },
     { id: 'theme', icon: state.theme === 'dark' ? '☀' : '☾', label: '切换明暗主题', run: toggleTheme },
-    { id: 'tw', icon: '⌶', label: '打字机专注模式', hint: '⌃J', run: () => setTypewriter(!state.typewriter) },
-    { id: 'save', icon: '⟳', label: '保存当前笔记', hint: '⌃S', run: saveCurrent },
+    { id: 'tw', icon: '⌶', label: '打字机专注模式', hint: `${MOD}+J`, run: () => setTypewriter(!state.typewriter) },
+    { id: 'save', icon: '⟳', label: '保存当前笔记', hint: `${MOD}+S`, run: saveCurrent },
     { id: 'folder', icon: '📁', label: '打开资料库文件夹…', run: pickVault }
   ]
   if (state.current) list.push({ id: 'del', icon: '✕', label: `删除「${state.current.name}」`, run: deleteCurrent })
