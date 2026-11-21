@@ -1,7 +1,7 @@
 {
   "name": "inkwell",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.0-alpha.1",
   "description": "Inkwell — local-first markdown writing app",
   "scripts": {
     "dev": "vite",
@@ -65,6 +65,15 @@
       "createStartMenuShortcut": true,
       "shortcutName": "Inkwell",
       "artifactName": "Inkwell Setup ${version}.${ext}"
+    },
+    "linux": {
+      "icon": "build/icon.png",
+      "category": "Office",
+      "maintainer": "skpcd",
+      "target": [
+        "AppImage",
+        "deb"
+      ]
     }
   },
   "allowScripts": {}
