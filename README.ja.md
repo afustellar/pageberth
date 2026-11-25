@@ -4,7 +4,7 @@
 
 **言葉が静かに泊まる場所。**
 
-[![status](https://img.shields.io/badge/version-0.1.0--alpha-orange)](https://github.com/skpcd/inkwell/releases)
+[![status](https://img.shields.io/badge/version-0.1.0--alpha-orange)](https://github.com/afustellar/inkwell/releases)
 [![platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-blue)](#ダウンロード)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -43,7 +43,7 @@
 
 ## ダウンロード
 
-[Releases](https://github.com/skpcd/inkwell/releases) から最新ビルドを入手：
+[Releases](https://github.com/afustellar/inkwell/releases) から最新ビルドを入手：
 
 | プラットフォーム | ファイル | 備考 |
 |------------------|----------|------|

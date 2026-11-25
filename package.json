@@ -51,6 +51,11 @@
       "electron/preload.cjs",
       "electron/index.html"
     ],
+    "publish": {
+      "provider": "github",
+      "owner": "afustellar",
+      "repo": "inkwell"
+    },
     "win": {
       "icon": "build/icon.ico",
       "target": [

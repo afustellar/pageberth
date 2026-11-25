@@ -4,7 +4,7 @@
 
 **A quiet berth for your words.**
 
-[![status](https://img.shields.io/badge/version-0.1.0--alpha-orange)](https://github.com/skpcd/inkwell/releases)
+[![status](https://img.shields.io/badge/version-0.1.0--alpha-orange)](https://github.com/afustellar/inkwell/releases)
 [![platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-blue)](#download)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -43,7 +43,7 @@ Pageberth is a **local-first** Markdown writing app: open a folder, and that fol
 
 ## Download
 
-Grab the latest build from [Releases](https://github.com/skpcd/inkwell/releases):
+Grab the latest build from [Releases](https://github.com/afustellar/inkwell/releases):
 
 | Platform | File | Notes |
 |----------|------|-------|

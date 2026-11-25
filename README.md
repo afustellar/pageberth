@@ -4,7 +4,7 @@
 
 **让文字，找到停泊的地方。**
 
-[![status](https://img.shields.io/badge/version-0.1.0--alpha-orange)](https://github.com/skpcd/inkwell/releases)
+[![status](https://img.shields.io/badge/version-0.1.0--alpha-orange)](https://github.com/afustellar/inkwell/releases)
 [![platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-blue)](#下载安装)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -43,7 +43,7 @@
 
 ## 下载安装
 
-从 [Releases](https://github.com/skpcd/inkwell/releases) 下载：
+从 [Releases](https://github.com/afustellar/inkwell/releases) 下载：
 
 | 平台 | 文件 | 说明 |
 |------|------|------|
