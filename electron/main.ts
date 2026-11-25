@@ -1,10 +1,133 @@
-﻿import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
+﻿import { app, BrowserWindow, dialog, ipcMain, shell, type IpcMainInvokeEvent } from 'electron'
 import { autoUpdater } from 'electron-updater'
 import * as fs from 'fs'
 import * as path from 'path'
 
+// Keep the existing profile and installer identity when the visible brand changes.
+if (!app.commandLine.hasSwitch('user-data-dir')) {
+  const legacyProfile = path.join(app.getPath('appData'), 'Inkwell')
+  fs.mkdirSync(legacyProfile, { recursive: true })
+  app.setPath('userData', legacyProfile)
+}
+
 let win: BrowserWindow | null = null
 let lastVersion: string | null = null
+
+function validFileName(name: string): string | null {
+  if (typeof name !== 'string') return null
+  const safe = name.replace(/[\\/:*?"<>|\x00-\x1f\x7f]/g, '-').trim().replace(/[. ]+$/, '')
+  if (!safe || /^\.+$/.test(safe) || /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(safe)) return null
+  return safe
+}
+
+function errorCode(err: unknown): string | undefined {
+  return err && typeof err === 'object' && 'code' in err && typeof err.code === 'string' ? err.code : undefined
+}
+
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err)
+}
+
+// Exclusive hard links are cheap; exFAT/FAT volumes need an exclusive copy instead.
+function moveFileWithoutReplace(src: string, dest: string): void {
+  if (!fs.lstatSync(src).isFile()) throw new Error('源文件不是普通文件')
+  try {
+    fs.linkSync(src, dest)
+  } catch (err) {
+    if (!['EPERM', 'EACCES', 'ENOTSUP', 'EOPNOTSUPP', 'ENOSYS'].includes(errorCode(err) || '')) throw err
+    fs.copyFileSync(src, dest, fs.constants.COPYFILE_EXCL)
+  }
+  try {
+    fs.unlinkSync(src)
+  } catch (err) {
+    fs.unlinkSync(dest)
+    throw err
+  }
+}
+
+function trashDirectory(vault: string): string {
+  const trash = path.join(vault, '.trash')
+  if (fs.existsSync(trash) && !fs.lstatSync(trash).isDirectory()) throw new Error('回收站不是文件夹')
+  return trash
+}
+
+function openExternalLink(url: string): void {
+  try {
+    if (!['https:', 'http:', 'mailto:'].includes(new URL(url).protocol)) return
+    void shell.openExternal(url).catch(() => {})
+  } catch { /* malformed links are ignored */ }
+}
+
+let activeVault: string | null = null
+const sessionVaults = new Set<string>()
+const looseFiles = new Set<string>()
+let watchedVault: string | null = null
+let vaultWatcher: fs.FSWatcher | null = null
+
+function stopVaultWatcher(): void {
+  vaultWatcher?.close()
+  vaultWatcher = null
+  watchedVault = null
+}
+
+app.on('before-quit', stopVaultWatcher)
+
+function vaultPath(dir: unknown): string | null {
+  if (typeof dir !== 'string' || !path.isAbsolute(dir)) return null
+  try {
+    const real = fs.realpathSync.native(dir)
+    return fs.statSync(real).isDirectory() ? real : null
+  } catch { return null }
+}
+
+function grantVault(dir: string): string | null {
+  const real = vaultPath(dir)
+  if (!real) return null
+  try {
+    const store = app.getPath('userData')
+    fs.mkdirSync(store, { recursive: true })
+    fs.writeFileSync(path.join(store, 'last-vault-path'), real, 'utf-8')
+    activeVault = real
+    sessionVaults.add(real)
+    return real
+  } catch { return null }
+}
+
+function restoreVaultGrant(): void {
+  try {
+    activeVault = vaultPath(fs.readFileSync(path.join(app.getPath('userData'), 'last-vault-path'), 'utf-8'))
+  } catch { activeVault = null }
+  if (activeVault) sessionVaults.add(activeVault)
+}
+
+function trustedSender(event: IpcMainInvokeEvent): boolean {
+  return !!win && event.sender === win.webContents && event.senderFrame === win.webContents.mainFrame
+}
+
+function grantedVault(dir: unknown): dir is string {
+  const real = vaultPath(dir)
+  return real !== null && sessionVaults.has(real)
+}
+
+function grantedFile(file: unknown): file is string {
+  if (typeof file !== 'string' || !path.isAbsolute(file) || !/\.(md|markdown|txt)$/i.test(file)) return false
+  if (validFileName(path.basename(file)) !== path.basename(file)) return false
+  try {
+    if (!fs.lstatSync(file).isFile()) return false
+    const real = fs.realpathSync.native(file)
+    return sessionVaults.has(path.dirname(real)) || looseFiles.has(real)
+  } catch { return false }
+}
+
+function grantOpenedFile(file: string): string | null {
+  if (typeof file !== 'string' || !path.isAbsolute(file) || !/\.(md|markdown|txt)$/i.test(file)) return null
+  try {
+    if (!fs.lstatSync(file).isFile()) return null
+    const real = fs.realpathSync.native(file)
+    if (validFileName(path.basename(real)) !== path.basename(real)) return null
+    return real
+  } catch { return null }
+}
 
 function createWindow() {
   const useFrameless = process.platform === 'win32'
@@ -13,14 +136,14 @@ function createWindow() {
     height: 800,
     minWidth: 860,
     minHeight: 560,
-    title: 'Inkwell',
+    title: 'Pageberth',
     backgroundColor: '#17161B',
     autoHideMenuBar: true,
     ...(useFrameless
       ? {
           frame: false,
           titleBarStyle: 'hidden',
-          icon: path.join(__dirname, '..', 'public', 'inkwell.png')
+          icon: path.join(__dirname, '..', 'dist', 'pageberth.png')
         }
       : {}),
     webPreferences: {
@@ -39,15 +162,21 @@ function createWindow() {
     win.loadFile(path.join(__dirname, 'index.html'))
   }
   win.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url)
+    openExternalLink(url)
     return { action: 'deny' }
+  })
+  win.webContents.on('will-navigate', (event, url) => {
+    if (url.split('#')[0] === win?.webContents.getURL().split('#')[0]) return
+    event.preventDefault()
+    openExternalLink(url)
   })
   // Windows "open with" passes the file path as argv[1] (packaged) / argv[1:] (dev)
   const argFile = process.argv.find(a => /\.(md|markdown|txt)$/i.test(a))
-  if (argFile) {
+  const openedFile = argFile && grantOpenedFile(argFile)
+  if (openedFile && grantVault(path.dirname(openedFile))) {
     win.webContents.on('did-finish-load', () => {
       win?.webContents.executeJavaScript('window.__inkOpenFile = true')
-      win?.webContents.send('ink:open-file', argFile)
+      win?.webContents.send('ink:open-file', openedFile)
     })
   }
 }
@@ -60,10 +189,12 @@ if (!gotLock) {
     if (win) {
       win.restore()
       const f = argv.find(a => /\.(md|markdown|txt)$/i.test(a))
-      if (f) win.webContents.send('ink:open-file', f)
+      const openedFile = f && grantOpenedFile(f)
+      if (openedFile && grantVault(path.dirname(openedFile))) win.webContents.send('ink:open-file', openedFile)
     }
   })
   app.whenReady().then(() => {
+    restoreVaultGrant()
   createWindow()
   // auto-update: only meaningful in packaged builds
   if (app.isPackaged) {
@@ -106,30 +237,54 @@ ipcMain.handle('ink:downloadUpdate', async () => {
 })
 ipcMain.on('ink:installUpdate', () => autoUpdater.quitAndInstall())
 
-ipcMain.handle('ink:pickFolder', async () => {
-  if (!win) return null
+ipcMain.handle('ink:getLastVault', (e) => trustedSender(e) ? activeVault : null)
+
+ipcMain.handle('ink:pickFolder', async (e) => {
+  if (!trustedSender(e) || !win) return null
   const r = await dialog.showOpenDialog(win, { properties: ['openDirectory'] })
-  return r.canceled ? null : r.filePaths[0]
+  return r.canceled || !r.filePaths[0] ? null : grantVault(r.filePaths[0])
 })
 
-ipcMain.handle('ink:openFileDialog', async () => {
-  if (!win) return null
+ipcMain.handle('ink:watchVault', (e, dir: string) => {
+  if (!trustedSender(e) || !grantedVault(dir)) return false
+  const real = vaultPath(dir)!
+  if (watchedVault === real && vaultWatcher) return true
+  stopVaultWatcher()
+  try {
+    const watcher = fs.watch(real, (_event, name) => {
+      win?.webContents.send('ink:vault-changed', real, name?.toString() ?? null, false)
+    })
+    watcher.on('error', () => {
+      if (vaultWatcher !== watcher) return
+      stopVaultWatcher()
+      win?.webContents.send('ink:vault-changed', real, null, true)
+    })
+    vaultWatcher = watcher
+    watchedVault = real
+    return true
+  } catch { return false }
+})
+
+ipcMain.handle('ink:openFileDialog', async (e) => {
+  if (!trustedSender(e) || !win) return null
   const r = await dialog.showOpenDialog(win, {
     properties: ['openFile'],
     filters: [{ name: 'Markdown', extensions: ['md', 'markdown', 'txt'] }]
   })
   if (r.canceled || !r.filePaths[0]) return null
-  const p = r.filePaths[0]
+  const p = grantOpenedFile(r.filePaths[0])
+  if (!p) return null
   try {
     const stat = fs.statSync(p)
-    if (!stat.isFile() || stat.size > 5 * 1024 * 1024) return null
-    return { path: p, content: fs.readFileSync(p, 'utf-8') }
-  } catch {
-    return null
-  }
+    if (stat.size > 5 * 1024 * 1024) return null
+    const content = fs.readFileSync(p, 'utf-8')
+    looseFiles.add(p)
+    return { path: p, content }
+  } catch { return null }
 })
 
-ipcMain.handle('ink:readDir', (_e, dir: string) => {
+ipcMain.handle('ink:readDir', (e, dir: string) => {
+  if (!trustedSender(e) || !grantedVault(dir)) return null
   try {
     const entries = fs.readdirSync(dir, { withFileTypes: true })
     const files = entries
@@ -146,7 +301,8 @@ ipcMain.handle('ink:readDir', (_e, dir: string) => {
   }
 })
 
-ipcMain.handle('ink:readFile', (_e, p: string) => {
+ipcMain.handle('ink:readFile', (e, p: string) => {
+  if (!trustedSender(e) || !grantedFile(p)) return null
   try {
     const stat = fs.statSync(p)
     if (!stat.isFile() || stat.size > 5 * 1024 * 1024) return null
@@ -156,50 +312,123 @@ ipcMain.handle('ink:readFile', (_e, p: string) => {
   }
 })
 
-ipcMain.handle('ink:writeFile', (_e, p: string, content: string) => {
+ipcMain.handle('ink:writeFile', (e, p: string, content: string, expected?: string) => {
+  if (!trustedSender(e) || !grantedFile(p) || typeof content !== 'string') return { ok: false }
+  let tmp: string | undefined
   try {
-    fs.writeFileSync(p, content, 'utf-8')
-    return true
+    const stat = fs.lstatSync(p)
+    if (!stat.isFile() || !/\.(md|markdown|txt)$/i.test(p)) return { ok: false }
+    if (expected !== undefined && fs.readFileSync(p, 'utf-8') !== expected) return { ok: false, conflict: true }
+    // Write a complete replacement before touching the original note.
+    tmp = path.join(path.dirname(p), `.${path.basename(p)}.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`)
+    fs.writeFileSync(tmp, content, { encoding: 'utf-8', flag: 'wx', mode: stat.mode })
+    fs.chmodSync(tmp, stat.mode)
+    fs.renameSync(tmp, p)
+    return { ok: true }
   } catch {
-    return false
+    return { ok: false }
+  } finally {
+    if (tmp) {
+      try { fs.unlinkSync(tmp) } catch { /* cleanup must not hide the save result */ }
+    }
   }
 })
 
-ipcMain.handle('ink:createFile', (_e, dir: string, name: string) => {
+ipcMain.handle('ink:createFile', (e, dir: string, name: string) => {
+  if (!trustedSender(e) || !grantedVault(dir)) return { ok: false, error: '资料库未授权' }
   try {
-    const safe = name.replace(/[\\/:*?"<>|]/g, '-').trim()
-    const full = `${safe}.md`.replace(/\.md\.md$/i, '.md')
+    const safe = validFileName(name)
+    if (!safe) return { ok: false, error: '文件名无效' }
+    const full = /\.md$/i.test(safe) ? safe : `${safe}.md`
+    const title = full.slice(0, -3)
+    if (!validFileName(title)) return { ok: false, error: '文件名无效' }
     const p = path.join(dir, full)
-    if (fs.existsSync(p)) return { ok: false, error: '同名文件已存在' }
-    fs.writeFileSync(p, `# ${safe}\n\n`, 'utf-8')
+    fs.writeFileSync(p, `# ${title}\n\n`, { encoding: 'utf-8', flag: 'wx' })
     return { ok: true, path: p, name: full }
-  } catch (err: any) {
-    return { ok: false, error: String(err?.message || err) }
+  } catch (err: unknown) {
+    return { ok: false, error: errorCode(err) === 'EEXIST' ? '同名文件已存在' : errorMessage(err) }
+  }
+})
+
+ipcMain.handle('ink:saveConflictCopy', async (e, vault: string | null, source: string, name: string, content: string) => {
+  if (!trustedSender(e) || !win || typeof source !== 'string' || typeof content !== 'string' ||
+      typeof name !== 'string' || validFileName(name) !== name || !/\.(md|markdown|txt)$/i.test(name)) {
+    return { ok: false, error: '副本文件名无效' }
+  }
+  const ext = path.extname(name)
+  const stem = name.slice(0, -ext.length)
+  if (vault !== null) {
+    if (!grantedVault(vault)) return { ok: false, error: '资料库未授权' }
+    const real = vaultPath(vault)!
+    if (path.dirname(source).toLowerCase() !== real.toLowerCase()) return { ok: false, error: '源文件不在当前资料库' }
+    for (let i = 1; i <= 999; i++) {
+      const fileName = `${stem}${i === 1 ? '' : ` ${i}`}${ext}`
+      const dest = path.join(real, fileName)
+      try {
+        fs.writeFileSync(dest, content, { encoding: 'utf-8', flag: 'wx' })
+        return { ok: true, path: dest, name: fileName }
+      } catch (err: unknown) {
+        if (errorCode(err) !== 'EEXIST') return { ok: false, error: errorMessage(err) }
+      }
+    }
+    return { ok: false, error: '副本文件名已用尽' }
+  }
+  if (!path.isAbsolute(source) || !looseFiles.has(source)) return { ok: false, error: '源文件未授权' }
+  const choice = await dialog.showSaveDialog(win, {
+    defaultPath: path.join(path.dirname(source), name),
+    filters: [{ name: 'Markdown', extensions: ['md', 'markdown', 'txt'] }]
+  })
+  if (choice.canceled || !choice.filePath) return { ok: false, canceled: true }
+  const fileName = path.basename(choice.filePath)
+  if (validFileName(fileName) !== fileName || !/\.(md|markdown|txt)$/i.test(fileName)) {
+    return { ok: false, error: '请选择 Markdown 文件名' }
+  }
+  try {
+    fs.writeFileSync(choice.filePath, content, { encoding: 'utf-8', flag: 'wx' })
+    const real = fs.realpathSync.native(choice.filePath)
+    looseFiles.add(real)
+    return { ok: true, path: real, name: fileName }
+  } catch (err: unknown) {
+    return { ok: false, error: errorCode(err) === 'EEXIST' ? '目标文件已存在，请换一个名称' : errorMessage(err) }
   }
 })
 
 // soft delete: move into <vault>/.trash/ instead of unlinking (recyclable)
-ipcMain.handle('ink:deleteFile', (_e, p: string) => {
+ipcMain.handle('ink:deleteFile', (e, p: string) => {
+  if (!trustedSender(e) || !grantedFile(p)) return false
   try {
+    if (!/\.(md|markdown|txt)$/i.test(p)) return false
+    const opened = fs.realpathSync.native(p)
     const vault = path.dirname(p)
-    const trash = path.join(vault, '.trash')
-    if (!fs.existsSync(trash)) fs.mkdirSync(trash, { recursive: true })
-    const stamp = new Date().toISOString().replace(/[:.]/g, '-')
-    const dest = path.join(trash, `${stamp}-${path.basename(p)}`)
-    fs.renameSync(p, dest)
-    return true
+    const trash = trashDirectory(vault)
+    if (!fs.existsSync(trash)) fs.mkdirSync(trash)
+    const time = Date.now()
+    let i = 0
+    for (;;) {
+      const stamp = new Date(time + i).toISOString().replace(/[:.]/g, '-')
+      const dest = path.join(trash, `${stamp}-${path.basename(p)}`)
+      try {
+        moveFileWithoutReplace(p, dest)
+        looseFiles.delete(opened)
+        return true
+      } catch (err: unknown) {
+        if (errorCode(err) !== 'EEXIST') throw err
+        i++
+      }
+    }
   } catch {
     return false
   }
 })
 
 // list trash contents (newest first)
-ipcMain.handle('ink:listTrash', (_e, vault: string) => {
+ipcMain.handle('ink:listTrash', (e, vault: string) => {
+  if (!trustedSender(e) || !grantedVault(vault)) return []
   try {
-    const trash = path.join(vault, '.trash')
+    const trash = trashDirectory(vault)
     if (!fs.existsSync(trash)) return []
     return fs.readdirSync(trash)
-      .filter(f => f.endsWith('.md') || f.endsWith('.markdown') || f.endsWith('.txt'))
+      .filter(f => /\.(md|markdown|txt)$/i.test(f) && fs.lstatSync(path.join(trash, f)).isFile())
       .sort()
       .reverse()
   } catch {
@@ -208,30 +437,39 @@ ipcMain.handle('ink:listTrash', (_e, vault: string) => {
 })
 
 // restore: move a trash file back to the vault root
-ipcMain.handle('ink:restoreTrash', (_e, vault: string, name: string) => {
+ipcMain.handle('ink:restoreTrash', (e, vault: string, name: string) => {
+  if (!trustedSender(e) || !grantedVault(vault)) return { ok: false, error: '资料库未授权' }
   try {
-    const trash = path.join(vault, '.trash')
-    const src = path.join(trash, name)
-    // strip the timestamp prefix (yyyy-mm-ddThh-mm-ss-mmm-)
+    if (typeof name !== 'string' || !name || name === '.' || name === '..' || /[\\/]/.test(name)) {
+      return { ok: false, error: '回收站文件名无效' }
+    }
     const orig = name.replace(/^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z-/, '')
+    if (orig === name || !/\.(md|markdown|txt)$/i.test(orig) || validFileName(orig) !== orig) {
+      return { ok: false, error: '回收站文件名无效' }
+    }
+    const src = path.join(trashDirectory(vault), name)
     let dest = path.join(vault, orig)
     let i = 1
-    while (fs.existsSync(dest)) {
-      const ext = path.extname(orig)
-      dest = path.join(vault, `${orig.slice(0, -ext.length || undefined)}-${i}${ext}`)
-      i++
+    for (;;) {
+      try {
+        moveFileWithoutReplace(src, dest)
+        return { ok: true, path: dest }
+      } catch (err: unknown) {
+        if (errorCode(err) !== 'EEXIST') throw err
+        const ext = path.extname(orig)
+        dest = path.join(vault, `${orig.slice(0, -ext.length)}-${i++}${ext}`)
+      }
     }
-    fs.renameSync(src, dest)
-    return { ok: true, path: dest }
-  } catch (err: any) {
-    return { ok: false, error: String(err?.message || err) }
+  } catch (err: unknown) {
+    return { ok: false, error: errorMessage(err) }
   }
 })
 
 // permanently empty the trash
-ipcMain.handle('ink:emptyTrash', (_e, vault: string) => {
+ipcMain.handle('ink:emptyTrash', (e, vault: string) => {
+  if (!trustedSender(e) || !grantedVault(vault)) return false
   try {
-    const trash = path.join(vault, '.trash')
+    const trash = trashDirectory(vault)
     if (fs.existsSync(trash)) fs.rmSync(trash, { recursive: true })
     return true
   } catch {
@@ -239,34 +477,41 @@ ipcMain.handle('ink:emptyTrash', (_e, vault: string) => {
   }
 })
 
-ipcMain.handle('ink:renameFile', (_e, p: string, newName: string) => {
+ipcMain.handle('ink:renameFile', (e, p: string, newName: string) => {
+  if (!trustedSender(e) || !grantedFile(p)) return { ok: false, error: '文件未授权' }
   try {
-    const safe = newName.replace(/[\\/:*?"<>|]/g, '-').trim()
+    if (!/\.(md|markdown|txt)$/i.test(p)) return { ok: false, error: '文件类型无效' }
+    const safe = validFileName(newName)
+    if (!safe) return { ok: false, error: '文件名无效' }
     const ext = path.extname(p) || '.md'
     const target = path.join(path.dirname(p), `${safe}${ext}`)
-    if (fs.existsSync(target)) return { ok: false, error: '同名文件已存在' }
-    fs.renameSync(p, target)
-    return { ok:true, path: target }
-  } catch (err: any) {
-    return { ok: false, error: String(err?.message || err) }
+    const opened = fs.realpathSync.native(p)
+    moveFileWithoutReplace(p, target)
+    if (looseFiles.delete(opened)) looseFiles.add(fs.realpathSync.native(target))
+    return { ok: true, path: target }
+  } catch (err: unknown) {
+    return { ok: false, error: errorCode(err) === 'EEXIST' ? '同名文件已存在' : errorMessage(err) }
   }
 })
 
-ipcMain.handle('ink:writeBinary', async (_e, dir: string, name: string, data: Uint8Array) => {
+ipcMain.handle('ink:writeBinary', async (e, dir: string, name: string, data: Uint8Array) => {
+  if (!trustedSender(e) || !grantedVault(dir)) return { ok: false, error: '资料库未授权' }
   try {
-    const safe = name.replace(/[^A-Za-z0-9._-]/g, '-')
+    const safe = typeof name === 'string' ? validFileName(name.replace(/[^A-Za-z0-9._-]/g, '-')) : null
+    if (!safe || safe !== name) return { ok: false, error: '文件名无效' }
     const assetsDir = path.join(dir, 'assets')
-    if (!fs.existsSync(assetsDir)) fs.mkdirSync(assetsDir, { recursive: true })
+    if (!fs.existsSync(assetsDir)) fs.mkdirSync(assetsDir)
+    if (!fs.lstatSync(assetsDir).isDirectory()) return { ok: false, error: '附件目录无效' }
     const p = path.join(assetsDir, safe)
-    fs.writeFileSync(p, Buffer.from(data))
+    fs.writeFileSync(p, data, { flag: 'wx' })
     return { ok: true, path: p }
-  } catch (err: any) {
-    return { ok: false, error: String(err?.message || err) }
+  } catch (err: unknown) {
+    return { ok: false, error: errorCode(err) === 'EEXIST' ? '同名文件已存在' : errorMessage(err) }
   }
 })
 
-ipcMain.handle('ink:exportFile', async (_e, defaultName: string, html: string) => {
-  if (!win) return null
+ipcMain.handle('ink:exportFile', async (e, defaultName: string, html: string) => {
+  if (!trustedSender(e) || !win) return null
   const r = await dialog.showSaveDialog(win, {
     title: '导出 HTML',
     defaultPath: defaultName.endsWith('.html') ? defaultName : `${defaultName}.html`,
@@ -281,8 +526,8 @@ ipcMain.handle('ink:exportFile', async (_e, defaultName: string, html: string) =
   }
 })
 
-ipcMain.handle('ink:exportPdf', async (_e, html: string) => {
-  if (!win) return null
+ipcMain.handle('ink:exportPdf', async (e, html: string) => {
+  if (!trustedSender(e) || !win) return null
   const r = await dialog.showSaveDialog(win, {
     title: '导出 PDF',
     defaultPath: '导出.pdf',

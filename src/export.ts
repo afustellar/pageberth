@@ -4,6 +4,7 @@
 
 import { renderMarkdown } from './markdown'
 import { mapWiki } from './links'
+import codeColors from './code-colors.css?inline'
 
 function palette(): Record<string, string> {
   const cs = getComputedStyle(document.documentElement)
@@ -33,7 +34,7 @@ export function buildStandaloneHtml(title: string, markdownSrc: string): string 
   const body = renderMarkdown(bodySrc)
 
   return `<!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="${document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light'}">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -80,6 +81,7 @@ export function buildStandaloneHtml(title: string, markdownSrc: string): string 
   table { border-collapse: collapse; }
   th, td { border: 1px solid var(--border); padding: 5px 10px; }
   img { max-width: 100%; }
+  ${codeColors}
 </style>
 </head>
 <body>

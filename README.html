@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>页泊 · Pageberth — README</title>
+<style>
+  :root {
+    --bg: #FFFFFF;
+    --panel: #FDFCFA;
+    --border: #ECEAE3;
+    --fg: #2C2C2A;
+    --accent: #4A4842;
+    --h: #242320;
+    --strong: #0F6E56;
+    --codebg: #F1F0EC;
+    --codefg: #2C2C2A;
+    --link: #185FA5;
+    --quote: #5F5E5A;
+    color-scheme: light;
+  }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    line-height: 1.75;
+  }
+  main { max-width: 760px; margin: 0 auto; padding: 48px 24px 80px; }
+  h1, h2, h3, h4, h5, h6 { color: var(--h); line-height: 1.4; }
+  h1 { font-size: 26px; } h2 { font-size: 21px; } h3 { font-size: 17px; }
+  a { color: var(--link); }
+  strong { color: var(--strong); }
+  code {
+    font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+    font-size: 0.9em;
+    background: var(--codebg);
+    color: var(--codefg);
+    padding: 1px 5px;
+    border-radius: 4px;
+  }
+  pre { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; overflow-x: auto; }
+  pre code { background: none; padding: 0; color: var(--fg); }
+  blockquote { margin: 0; padding: 2px 16px; border-left: 3px solid var(--accent); color: var(--quote); }
+  hr { border: none; border-top: 1px solid var(--border); }
+  table { border-collapse: collapse; }
+  th, td { border: 1px solid var(--border); padding: 5px 10px; }
+  img { max-width: 100%; }
+</style>
+</head>
+<body>
+<main>
+  <div align="center">
+
+<p><img src="public/pageberth.svg" alt="页泊标志" width="72" valign="middle">&nbsp;&nbsp;<font size="6"><strong>页泊 · Pageberth</strong></font></p>
+<p><strong>让文字，找到停泊的地方。</strong></p>
+<p><a href="https://github.com/skpcd/inkwell/releases"><img src="https://img.shields.io/badge/version-0.1.0--alpha-orange" alt="status"></a>
+<a href="#%E4%B8%8B%E8%BD%BD%E5%AE%89%E8%A3%85"><img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-blue" alt="platform"></a>
+<a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="license"></a></p>
+<p><strong>中文</strong> · <a href="./README.en.md">English</a> · <a href="./README.ja.md">日本語</a></p>
+<p><a href="#%E4%B8%8B%E8%BD%BD%E5%AE%89%E8%A3%85">下载安装</a> · <a href="#%E5%8A%9F%E8%83%BD%E4%B8%80%E8%A7%88">功能一览</a> · <a href="#%E5%BC%80%E5%8F%91">开发</a></p>
+</div>
+
+<hr>
+<p>页泊（Pageberth）是<strong>本地优先</strong>的 Markdown 写作软件：打开一个文件夹就是你的资料库，<code>.md</code> 文件永远是你的文件。不搞数据库、不搞云、不搞账号。</p>
+<img src="assets/screenshot.png" alt="页泊编辑器截图" width="900">
+
+<h2>功能一览</h2>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody><tr>
+<td>✍️ <strong>三态视图</strong></td>
+<td>编辑 / 分屏 / 预览，一键切换，默认分屏</td>
+</tr>
+<tr>
+<td>🎨 <strong>代码着色</strong></td>
+<td>按代码围栏语言给编辑器、预览和导出的 HTML/PDF 着色，明暗主题适配</td>
+</tr>
+<tr>
+<td>🔗 <strong>双向链接</strong></td>
+<td><code>[[笔记名]]</code> 自动建链，点击跳转或创建，支持别名</td>
+</tr>
+<tr>
+<td>🕸 <strong>关系图谱</strong></td>
+<td>零依赖力导向图，节点按连接数加权，孤岛笔记一目了然</td>
+</tr>
+<tr>
+<td>📋 <strong>大纲面板</strong></td>
+<td>六级标题目录，点击跳行，预览模式同步滚动</td>
+</tr>
+<tr>
+<td>🔎 <strong>全文搜索</strong></td>
+<td>跨笔记搜内容，带上下文片段（<code>Ctrl+Shift+F</code>）</td>
+</tr>
+<tr>
+<td>📂 <strong>外部修改同步</strong></td>
+<td>文件在其他程序中增删改名后，侧栏、搜索和图谱自动更新；遇到未保存冲突时可对比两个版本、另存本地副本或载入磁盘版本</td>
+</tr>
+<tr>
+<td>⌨️ <strong>长文输入</strong></td>
+<td>输入时显示统计及预览待更新状态；停笔后更新字数、阅读时长与分屏预览，自动保存区分等待和写入阶段</td>
+</tr>
+<tr>
+<td>⚡ <strong>快速切换</strong></td>
+<td>最近打开优先的笔记切换器（<code>Ctrl+P</code>）</td>
+</tr>
+<tr>
+<td>🖼 <strong>图片粘贴</strong></td>
+<td>在资料库内把剪贴板截图直接贴进笔记，存入 <code>assets/</code></td>
+</tr>
+<tr>
+<td>🗑 <strong>回收站</strong></td>
+<td>删除先进回收站，可恢复，防手滑</td>
+</tr>
+<tr>
+<td>📤 <strong>导出</strong></td>
+<td>自包含单文件 HTML + PDF</td>
+</tr>
+<tr>
+<td>🌗 <strong>主题系统</strong></td>
+<td>明暗模式（可跟随系统）× 5 种主题色</td>
+</tr>
+<tr>
+<td>🌍 <strong>三语界面</strong></td>
+<td>中文 / English / 日本語</td>
+</tr>
+<tr>
+<td>⌨️ <strong>命令面板</strong></td>
+<td><code>Ctrl+K</code>，所有操作的统一入口</td>
+</tr>
+<tr>
+<td>🔄 <strong>自动更新</strong></td>
+<td>应用内检查更新，进度条 + 重启安装</td>
+</tr>
+</tbody></table>
+<h2>下载安装</h2>
+<p>从 <a href="https://github.com/skpcd/inkwell/releases">Releases</a> 下载：</p>
+<table>
+<thead>
+<tr>
+<th>平台</th>
+<th>文件</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Windows</td>
+<td><code>Pageberth Setup *.exe</code></td>
+<td>引导式安装，可选目录</td>
+</tr>
+<tr>
+<td>Linux</td>
+<td><code>*.AppImage</code> / <code>*.deb</code></td>
+<td>AppImage 免安装直接运行</td>
+</tr>
+<tr>
+<td>macOS</td>
+<td><code>*-arm64-mac.zip</code></td>
+<td>Apple Silicon；未签名，右键打开绕过 Gatekeeper</td>
+</tr>
+</tbody></table>
+<blockquote>
+<p>构建未签名：Windows SmartScreen 提示请选「更多信息 → 仍要运行」</p>
+</blockquote>
+<h2>开发</h2>
+<pre><code class="language-bash">npm install        # 安装依赖
+npm run dev        # Web 预览 @ http://localhost:5178
+npm run typecheck  # TypeScript 类型检查
+npm run icons      # 从 SVG 重新生成应用、安装包及社交图标
+npm run electron:dev    # 打包并启动桌面应用
+npm run electron:build  # 产出安装包到 release/
+</code></pre>
+<p>技术栈：Electron · Vite · TypeScript（无框架，原生 DOM）· CodeMirror 6 · marked + DOMPurify · highlight.js</p>
+<p>使用“打开文件”单独选中的文件只获得该文件的访问权限；如需粘贴图片，请打开它所在的文件夹作为资料库。更名保留原应用标识和用户资料路径，现有笔记及设置继续可用。当前 Releases 中的旧安装包仍显示 Inkwell，更新后的构建名称为 Pageberth。</p>
+<h2>License</h2>
+<p>MIT</p>
+
+</main>
+</body>
+</html>

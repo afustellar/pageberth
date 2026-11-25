@@ -1,7 +1,8 @@
-﻿/* Inkwell — UI shell assembly.
+﻿/* Pageberth — UI shell assembly.
    Architecture rule: all platform access goes through `api` (src/api.ts). */
 
 import './styles.css'
+import './code-colors.css'
 import { applyTheme, applyAccent, loadTheme, loadAccent, ACCENTS, type ThemeName, type AccentId } from './theme'
 import { createEditor, type EditorHandle } from './editor'
 import { renderMarkdown } from './markdown'
@@ -45,7 +46,6 @@ const ICONS: Record<string, string> = {
   search: '<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>',
   switcher: '<rect x="3.5" y="4.5" width="17" height="6" rx="1.5"/><rect x="3.5" y="13.5" width="12" height="6" rx="1.5"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
-  logo: '<path d="M12 3l4.2 6.3c0 4.2-1.6 7-4.2 12.7-2.6-5.7-4.2-8.5-4.2-12.7z"/><circle cx="12" cy="11" r="1.6"/><path d="M12 12.8V19"/>'
 }
 
 const state = {
@@ -62,8 +62,11 @@ const state = {
   saveTimer: 0 as unknown as ReturnType<typeof setTimeout>
 }
 
-/* content cache for graph building (path -> raw markdown) */
+/* Raw note contents for search, graph and backlinks. */
 const editorCache = new Map<string, string>()
+let conflictPath: string | null = null
+let conflictVault: string | null = null
+let conflictDiskRead = 0
 
 /* ---------- DOM scaffold ---------- */
 
@@ -73,8 +76,8 @@ root.innerHTML = `
 <div id="app-root">
   <header class="topbar">
     ${isMac ? '<div class="traffic-dots"><span class="dot-close"></span><span class="dot-min"></span><span class="dot-max"></span></div>' : ''}
-    <span class="brand"><svg viewBox="0 0 512 512" width="18" height="18" aria-hidden="true"><rect width="512" height="512" rx="112" fill="#FFFFFF"/><rect x="16" y="16" width="480" height="480" rx="96" fill="none" stroke="#ECEAE3" stroke-width="8"/><path d="M96 372 C 190 366, 300 356, 408 300" fill="none" stroke="#D85A30" stroke-width="36" stroke-linecap="round"/><g transform="rotate(-42 290 190)"><path d="M290 78 L350 214 L290 262 L230 214 Z" fill="#2C2C2A"/><circle cx="290" cy="196" r="17" fill="#FFFFFF"/><path d="M290 213 L290 262" stroke="#FFFFFF" stroke-width="11" stroke-linecap="round"/></g></svg></span>
-    <span class="app-title">Inkwell</span>
+    <span class="brand"><img src="./pageberth.svg" width="18" height="18" alt="" /></span>
+    <span class="app-title" translate="no">页泊</span>
     <button class="vault-name" id="vault-btn" title="${t('openVaultTitle')}">${t('vault')}</button>
     <div class="seg" id="view-seg">
       <button data-view="edit">${t('edit')}</button>
@@ -104,7 +107,7 @@ root.innerHTML = `
           <button class="icon-btn" id="new-btn" title="${t('newNote')}" aria-label="${t('newNote')}">${I('plus', '新建笔记')}</button>
         </div>
       </div>
-      <input class="search" id="filter-input" placeholder="${t('search')}" />
+      <input class="search" id="filter-input" placeholder="${t('search')}" aria-label="${t('search')}" autocomplete="off" />
       <div class="file-list" id="file-list"></div>
     </aside>
     <main class="workspace">
@@ -117,7 +120,7 @@ root.innerHTML = `
         <div class="outline-list" id="backlink-list"></div>
       </aside>
       <div class="welcome" id="welcome">
-        <h2>Inkwell</h2>
+        <h1 translate="no">页泊 · Pageberth</h1>
         <p>${t('welcomeSlogan')}</p>
         <div class="row">
           <button id="new-note-btn">${t('newNote')}</button>
@@ -131,9 +134,11 @@ root.innerHTML = `
   <footer class="statusbar">
     <span id="st-words">0 字</span>
     <span id="st-read">约 1 分钟</span>
+    <span id="st-preview" hidden>${t('previewPending')}</span>
     <span id="st-daily">今日 +0 字</span>
     <span class="spacer"></span>
-    <span class="save-state" id="st-save">就绪</span>
+    <span class="save-state" id="st-save" role="status" aria-live="polite">就绪</span>
+    <button class="conflict-review" id="conflict-review" hidden>${t('conflictReview')}</button>
   </footer>
 </div>
 <div id="palette-root"></div>
@@ -147,14 +152,16 @@ const filterInput = $<HTMLInputElement>('#filter-input')
 const vaultBtn = $('#vault-btn')
 const stWords = $('#st-words')
 const stRead = $('#st-read')
+const stPreview = $<HTMLElement>('#st-preview')
 const stSave = $('#st-save')
+const conflictReviewBtn = $<HTMLButtonElement>('#conflict-review')
+conflictReviewBtn.addEventListener('click', openConflictModal)
 const stDaily = $('#st-daily')
 const outlinePanel = $('#outline-panel')
 const outlineList = $('#outline-list')
 const backlinkList = $('#backlink-list')
 
-function renderOutline() {
-  const doc = editor?.view.state.doc.toString() ?? ''
+function renderOutline(doc = editor?.view.state.doc.toString() ?? '') {
   renderOutlineList(extractHeadings(doc))
   renderBacklinks()
 }
@@ -227,6 +234,10 @@ let imgSeq = 0
 
 async function pasteImage(file: File, view: EditorView) {
   if (!api.writeBinary) return
+  if (state.current && !state.current.scratch && !state.files.some(f => f.path === state.current?.path)) {
+    alert('单独打开的文件不能保存图片。请先打开该文件所在文件夹作为资料库，再粘贴图片。')
+    return
+  }
   let dir = state.vault
   if (!dir) {
     const okv = await pickVault()
@@ -256,6 +267,7 @@ function applyView() {
   previewPane.style.display = !active || v === 'edit' ? 'none' : ''
   welcomeEl.style.display = active ? 'none' : ''
   localStorage.setItem('inkwell:view', v)
+  if (v !== 'edit' && previewStale) flushVisiblePreview()
   document.querySelectorAll<HTMLButtonElement>('#view-seg button').forEach(b => {
     b.classList.toggle('on', b.dataset.view === v)
   })
@@ -263,8 +275,7 @@ function applyView() {
 
 /* ---------- Markdown preview ---------- */
 
-function renderPreview() {
-  const text = editor?.view.state.doc.toString() ?? ''
+function renderPreview(text = editor?.view.state.doc.toString() ?? '') {
   // preserve scroll position across re-renders (typing in split mode used to jump the preview to top)
   const prevScroll = previewPane.scrollTop
   previewPane.innerHTML = renderMarkdown(wikiToMarkdown(text))
@@ -309,11 +320,7 @@ function renderPreview() {
 /* ---------- Open-or-create by wiki name ---------- */
 
 async function openByName(target: string) {
-  // draft note: materialize first so the wiki target lands in a real vault
-  if (state.current?.scratch) {
-    const real = await materializeScratch()
-    if (!real) return
-  }
+  if (!(await saveBeforeSwitch())) return
   if (!state.vault) return
   const hit = state.files.find(f => f.label.toLowerCase() === target.toLowerCase())
   if (hit) {
@@ -335,6 +342,7 @@ let outlineOpen = localStorage.getItem('inkwell:outline') === '1'
 function applyOutline() {
   outlinePanel.style.display = outlineOpen ? '' : 'none'
   localStorage.setItem('inkwell:outline', outlineOpen ? '1' : '0')
+  if (outlineOpen && outlineStale) flushVisiblePreview()
   $('#outline-btn').classList.toggle('on', outlineOpen)
 }
 
@@ -388,9 +396,7 @@ function jumpToLine(line: number) {
 
 /* ---------- Status bar ---------- */
 
-function updateStatus() {
-  const text = editor?.view.state.doc.toString() ?? ''
-  const s = wordStat(text)
+function updateStatus(s = wordStat(editor?.view.state.doc.toString() ?? '')) {
   stWords.textContent = `${s.words} 字`
   stRead.textContent = `约 ${s.readMinutes} 分钟`
   const today = todayKey()
@@ -428,10 +434,229 @@ function bumpDaily(currentWords: number) {
   try { localStorage.setItem('inkwell:daily', JSON.stringify(all)) } catch { /* ignore */ }
 }
 
-function setSaveState(kind: 'clean' | 'dirty' | 'saved') {
-  state.dirty = kind === 'dirty'
-  stSave.textContent = kind === 'clean' ? '已保存' : kind === 'dirty' ? '编辑中…' : '已保存'
-  stSave.classList.toggle('dirty', kind === 'dirty')
+type SavePhase = 'clean' | 'dirty' | 'pending' | 'saving' | 'failed'
+let savePhase: SavePhase = 'clean'
+let statsTimer: ReturnType<typeof setTimeout> | undefined
+let previewTimer: ReturnType<typeof setTimeout> | undefined
+let settledText: string | null = null
+let previewStale = false
+let outlineStale = false
+
+function showSaveState() {
+  stSave.textContent = conflictPath !== null && conflictPath === state.current?.path ? t('externalConflictStatus')
+    : savePhase === 'clean' ? t('savedStatus')
+    : savePhase === 'dirty' ? t('typingStatus')
+    : savePhase === 'pending' ? t(state.current?.scratch ? 'draftStatus' : 'pendingStatus')
+    : savePhase === 'saving' ? t('savingStatus') : t('saveFailedStatus')
+  stSave.classList.toggle('dirty', state.dirty)
+}
+
+function setSaveState(kind: SavePhase) {
+  savePhase = kind
+  state.dirty = kind !== 'clean'
+  showSaveState()
+}
+
+function flushTypingStats() {
+  if (statsTimer === undefined) return
+  clearTimeout(statsTimer)
+  statsTimer = undefined
+  if (!editor || !state.current) return
+  const text = editor.view.state.doc.toString()
+  settledText = previewTimer === undefined ? null : text
+  const s = wordStat(text)
+  bumpDaily(s.words)
+  updateStatus(s)
+  if (savePhase === 'dirty' && conflictPath !== state.current.path) setSaveState('pending')
+}
+
+function flushVisiblePreview() {
+  clearTimeout(previewTimer)
+  previewTimer = undefined
+  if ((previewStale && state.view !== 'edit') || (outlineStale && outlineOpen)) {
+    const text = settledText ?? editor?.view.state.doc.toString() ?? ''
+    if (previewStale && state.view !== 'edit') {
+      renderPreview(text)
+      previewStale = false
+      stPreview.hidden = true
+    }
+    if (outlineStale && outlineOpen) {
+      renderOutline(text)
+      outlineStale = false
+    }
+  }
+  settledText = null
+}
+
+function refreshDocument() {
+  flushTypingStats()
+  clearTimeout(previewTimer)
+  previewTimer = undefined
+  previewStale = false
+  outlineStale = false
+  stPreview.hidden = true
+  const text = editor?.view.state.doc.toString() ?? ''
+  updateStatus(wordStat(text))
+  renderPreview(text)
+  renderOutline(text)
+  settledText = null
+}
+
+function markExternalConflict(path: string, vault?: string) {
+  if (state.current?.path !== path || conflictPath === path) return
+  conflictPath = path
+  conflictVault = vault ?? (state.vault && state.files.some(f => f.path === path) ? state.vault : null)
+  clearTimeout(state.saveTimer)
+  setSaveState('dirty')
+  conflictReviewBtn.hidden = false
+  openConflictModal()
+}
+
+function closeConflictModal() {
+  $('#conflict-modal')?.remove()
+  if (conflictPath) conflictReviewBtn.focus()
+  else editor?.view.focus()
+}
+
+function clearExternalConflict() {
+  conflictPath = null
+  conflictVault = null
+  conflictReviewBtn.hidden = true
+  closeConflictModal()
+}
+
+async function refreshConflictDiskView() {
+  const path = conflictPath
+  const wrap = document.getElementById('conflict-modal')
+  if (!path || !wrap) return
+  const request = ++conflictDiskRead
+  const disk = await api.readFile(path)
+  if (request !== conflictDiskRead || !wrap.isConnected || conflictPath !== path) return
+  wrap.querySelector<HTMLElement>('#conflict-disk')!.textContent = disk ?? t('conflictUnavailable')
+  wrap.querySelector<HTMLButtonElement>('#conflict-reload')!.disabled = disk === null || wrap.querySelector<HTMLButtonElement>('#conflict-copy')!.disabled
+}
+
+function openConflictModal() {
+  const source = state.current
+  if (!conflictPath || !source || !editor) return
+  if ($('#conflict-modal')) { $<HTMLButtonElement>('#conflict-copy').focus(); return }
+  const wrap = document.createElement('div')
+  wrap.id = 'conflict-modal'
+  wrap.className = 'modal-overlay'
+  wrap.innerHTML = `
+    <div class="modal conflict-modal" role="dialog" aria-modal="true" aria-labelledby="conflict-title" aria-describedby="conflict-description">
+      <div class="modal-head">
+        <span class="label" id="conflict-title">${t('conflictTitle')} · <span id="conflict-filename"></span></span>
+        <button class="icon-btn" id="conflict-close" aria-label="${t('close')}" title="${t('close')}">✕</button>
+      </div>
+      <p class="conflict-description" id="conflict-description">${t('conflictDescription')}</p>
+      <div class="conflict-columns">
+        <section class="conflict-version" aria-labelledby="conflict-local-label">
+          <h3 id="conflict-local-label">${t('conflictLocal')}</h3>
+          <pre id="conflict-local"></pre>
+        </section>
+        <section class="conflict-version" aria-labelledby="conflict-disk-label">
+          <h3 id="conflict-disk-label">${t('conflictDisk')}</h3>
+          <pre id="conflict-disk"></pre>
+        </section>
+      </div>
+      <p class="conflict-error" id="conflict-error" role="alert" hidden></p>
+      <div class="conflict-actions">
+        <button id="conflict-discard">${t('conflictDiscard')}</button>
+        <button id="conflict-reload" disabled>${t('conflictReload')}</button>
+        <button id="conflict-copy" class="primary">${t('conflictSaveCopy')}</button>
+      </div>
+    </div>`
+  $('#palette-root').appendChild(wrap)
+  wrap.querySelector<HTMLElement>('#conflict-filename')!.textContent = source.name
+  wrap.querySelector<HTMLElement>('#conflict-local')!.textContent = editor.view.state.doc.toString()
+  wrap.querySelector<HTMLElement>('#conflict-disk')!.textContent = t('conflictLoading')
+  const error = wrap.querySelector<HTMLElement>('#conflict-error')!
+  const showError = (message: string) => { error.textContent = message; error.hidden = false }
+  const copy = wrap.querySelector<HTMLButtonElement>('#conflict-copy')!
+  const reload = wrap.querySelector<HTMLButtonElement>('#conflict-reload')!
+  const discard = wrap.querySelector<HTMLButtonElement>('#conflict-discard')!
+  const close = wrap.querySelector<HTMLButtonElement>('#conflict-close')!
+  close.addEventListener('click', () => { if (!copy.disabled) closeConflictModal() })
+  wrap.addEventListener('mousedown', e => { if (e.target === wrap && !copy.disabled) closeConflictModal() })
+  wrap.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && !copy.disabled) { e.preventDefault(); e.stopPropagation(); closeConflictModal() }
+  })
+  copy.addEventListener('click', async () => {
+    if (conflictPath !== source.path || !editor) return
+    const content = editor.view.state.doc.toString()
+    const vault = conflictVault
+    const ext = source.name.match(/\.(md|markdown|txt)$/i)?.[0] ?? '.md'
+    const name = `${source.label} (${t('conflictCopySuffix')})${ext}`
+    copy.disabled = true
+    reload.disabled = true
+    discard.disabled = true
+    close.disabled = true
+    error.hidden = true
+    let result: Awaited<ReturnType<typeof api.saveConflictCopy>>
+    try { result = await api.saveConflictCopy(vault, source.path, name, content) }
+    catch { showError(t('conflictSaveFailed')); return }
+    finally {
+      copy.disabled = false
+      discard.disabled = false
+      close.disabled = false
+      void refreshConflictDiskView()
+    }
+    if (result.canceled) return
+    if (!result.ok || !result.path) { showError(t('conflictSaveFailed')); return }
+    await pendingSave
+    if (state.current?.path !== source.path || editor?.view.state.doc.toString() !== content) {
+      showError(t('conflictCopySavedChanged', { n: result.name ?? name }))
+      return
+    }
+    clearTimeout(state.saveTimer)
+    const inVault = vault !== null && state.vault === vault
+    clearExternalConflict()
+    state.current = null
+    state.dirty = false
+    editorCache.delete(source.path)
+    if (inVault) await refreshFiles(result.path)
+    else {
+      const fileName = result.name ?? result.path.split(/[\\/]/).pop() ?? name
+      await openFile({ path: result.path, name: fileName, label: labelOf(fileName) })
+    }
+  })
+  wrap.querySelector('#conflict-reload')!.addEventListener('click', async () => {
+    if (copy.disabled) return
+    await pendingSave
+    if (state.current?.path !== source.path || conflictPath !== source.path) return
+    const disk = await api.readFile(source.path)
+    if (state.current?.path !== source.path) return
+    if (disk === null) { showError(t('conflictUnavailable')); void refreshConflictDiskView(); return }
+    clearExternalConflict()
+    editorCache.set(source.path, disk)
+    lastCount = wordStat(disk).words
+    const view = editor!.view
+    view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: disk } })
+    clearTimeout(state.saveTimer)
+    setSaveState('clean')
+    refreshDocument()
+  })
+  wrap.querySelector('#conflict-discard')!.addEventListener('click', async () => {
+    if (copy.disabled) return
+    if (!confirm(t('conflictDiscardConfirm'))) return
+    await pendingSave
+    if (state.current?.path !== source.path) return
+    clearTimeout(state.saveTimer)
+    clearExternalConflict()
+    state.current = null
+    editorCache.delete(source.path)
+    editor?.view.dispatch({ changes: { from: 0, to: editor.view.state.doc.length, insert: '' } })
+    applyView()
+    if (state.vault) await refreshFiles()
+    else renderFileList()
+    renderBacklinks()
+    if ($('#graph-modal')) renderGraphView()
+    setSaveState('clean')
+    refreshDocument()
+  })
+  copy.focus()
+  void refreshConflictDiskView()
 }
 
 /* ---------- File operations ---------- */
@@ -445,8 +670,10 @@ async function refreshFiles(keepPath?: string) {
   const r = await api.readDir(state.vault)
   if (!r) return
   const web = !api.isElectron
+  const base = state.vault.replace(/[\\/]+$/, '')
+  const separator = state.vault.includes('\\') ? '\\' : '/'
   state.files = r.files.map((name, i) => ({
-    path: web ? `vault:${state.vault}/files/${name}` : `${state.vault}\\${name}`,
+    path: web ? `vault:${state.vault}/files/${name}` : `${base}${separator}${name}`,
     name,
     label: labelOf(name)
   }))
@@ -458,8 +685,111 @@ async function refreshFiles(keepPath?: string) {
   }
   renderFileList()
   const keep = keepPath ? state.files.find(f => f.path === keepPath) : null
-  if (keep) openFile(keep)
+  if (keep) await openFile(keep)
 }
+
+let watchTimer: number | undefined
+let watchQueue: Promise<void> = Promise.resolve()
+const watchedNames = new Set<string>()
+let scanAllFiles = false
+let fallbackPoll: number | undefined
+
+async function syncExternalFiles(vault: string, names: Set<string> | null) {
+  if (state.vault !== vault) return
+  const listing = await api.readDir(vault)
+  if (!listing || state.vault !== vault) return
+  const web = !api.isElectron
+  const base = vault.replace(/[\\/]+$/, '')
+  const separator = vault.includes('\\') ? '\\' : '/'
+  const files = listing.files.map(name => ({
+    path: web ? `vault:${vault}/files/${name}` : `${base}${separator}${name}`,
+    name,
+    label: labelOf(name)
+  }))
+  const contents = new Map<string, string>()
+  const changedNames = names && new Set([...names].map(name => name.toLowerCase()))
+  for (const file of files) {
+    if (changedNames && !changedNames.has(file.name.toLowerCase()) && editorCache.has(file.path)) continue
+    const content = await api.readFile(file.path)
+    if (state.vault !== vault) return
+    if (content !== null) contents.set(file.path, content)
+  }
+  const paths = new Set(files.map(f => f.path))
+  let changed = files.length !== state.files.length || files.some((f, i) => f.path !== state.files[i]?.path)
+  const currentWasInVault = state.current && state.files.some(f => f.path === state.current?.path)
+  for (const old of state.files) {
+    if (!paths.has(old.path)) editorCache.delete(old.path)
+  }
+  state.files = files
+  if (currentWasInVault && state.current && !paths.has(state.current.path)) markExternalConflict(state.current.path, vault)
+  for (const file of files) {
+    const content = contents.get(file.path)
+    if (content === undefined || editorCache.get(file.path) === content) continue
+    if (state.current?.path === file.path && editor) {
+      if (state.dirty || conflictPath === file.path) {
+        markExternalConflict(file.path, vault)
+        continue
+      }
+      const view = editor.view
+      lastCount = wordStat(content).words
+      editorCache.set(file.path, content)
+      view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: content } })
+      clearTimeout(state.saveTimer)
+      setSaveState('clean')
+      refreshDocument()
+    } else editorCache.set(file.path, content)
+    changed = true
+  }
+  if (conflictPath) void refreshConflictDiskView()
+  if (!changed) return
+  renderFileList()
+  renderBacklinks()
+  if ($('#graph-modal')) renderGraphView()
+  $('#search-input')?.dispatchEvent(new Event('input'))
+}
+
+function queueVaultRefresh(vault: string, name: string | null) {
+  if (state.vault !== vault) return
+  if (name !== null && !/\.(md|markdown|txt)$/i.test(name)) return
+  if (name === null) scanAllFiles = true
+  else watchedNames.add(name)
+  clearTimeout(watchTimer)
+  watchTimer = window.setTimeout(() => {
+    watchTimer = undefined
+    const names = scanAllFiles ? null : new Set(watchedNames)
+    scanAllFiles = false
+    watchedNames.clear()
+    watchQueue = watchQueue.then(() => syncExternalFiles(vault, names)).catch(() => {})
+  }, 120)
+}
+
+function startVaultWatch(vault: string) {
+  clearTimeout(watchTimer)
+  watchedNames.clear()
+  scanAllFiles = false
+  clearInterval(fallbackPoll)
+  fallbackPoll = undefined
+  if (!api.watchVault) return
+  const pollIfNeeded = () => {
+    if (state.vault === vault && !fallbackPoll) {
+      fallbackPoll = window.setInterval(() => queueVaultRefresh(vault, null), 2500)
+    }
+  }
+  void api.watchVault(vault).then(ok => { if (!ok) pollIfNeeded() }).catch(pollIfNeeded)
+}
+
+api.onVaultChange?.((vault, name, failed) => {
+  if (failed && state.vault === vault && !fallbackPoll) {
+    fallbackPoll = window.setInterval(() => queueVaultRefresh(vault, null), 2500)
+  }
+  queueVaultRefresh(vault, name)
+})
+
+window.addEventListener('storage', e => {
+  if (!state.vault) return
+  const prefix = `inkwell:vault:${state.vault}/files/`
+  if (e.key?.startsWith(prefix)) queueVaultRefresh(state.vault, e.key.slice(prefix.length))
+})
 
 function renderFileList() {
   const q = filterInput.value.trim().toLowerCase()
@@ -503,18 +833,11 @@ function renderFileList() {
         else { state.files = state.files; /* unreachable: scratch is always current */ }
         return
       }
+      if (state.current?.path === f.path) { await deleteCurrent(); return }
       if (!confirm(`把「${f.name}」移入回收站？`)) return
-      const wasCurrent = state.current?.path === f.path
       const ok = await api.deleteFile(f.path)
       if (!ok) { alert('移入回收站失败'); return }
       editorCache.delete(f.path)
-      if (wasCurrent) {
-        state.current = null
-        editor?.view.dispatch({ changes: { from: 0, to: editor.view.state.doc.length, insert: '' } })
-        applyView()
-        updateStatus()
-        renderPreview()
-      }
       await refreshFiles()
     }
     row.appendChild(del)
@@ -523,9 +846,12 @@ function renderFileList() {
 }
 
 async function openFile(f: FileMeta) {
+  if (!(await saveBeforeSwitch())) return
   const ed = ensureEditor()
-  const content = (await api.readFile(f.path)) ?? ''
+  const content = await api.readFile(f.path)
+  if (content === null) { alert(`无法读取「${f.name}」`); return }
   editorCache.set(f.path, content)
+  clearExternalConflict()
   // mark current BEFORE dispatch so the doc-replace doesn't count as user editing
   state.current = f
   lastCount = wordStat(content).words
@@ -537,55 +863,92 @@ async function openFile(f: FileMeta) {
   applyView()
   setSaveState('clean')
   clearTimeout(state.saveTimer) // the dispatch marked dirty; cancel any pending save
-  updateStatus()
-  renderPreview()
-  renderOutline()
+  refreshDocument()
   ed.view.focus()
 }
 
 function onDocChanged() {
   if (!state.current) return
-  updateStatus()
-  bumpDaily(wordStat(editor?.view.state.doc.toString() ?? '').words)
-  renderPreview()
-  renderOutline()
+  settledText = null
+  previewStale = true
+  outlineStale = true
+  stPreview.hidden = state.view === 'edit'
+  stWords.textContent = t('statsPending')
+  stRead.textContent = '…'
+  clearTimeout(statsTimer)
+  statsTimer = setTimeout(flushTypingStats, 160)
+  clearTimeout(previewTimer)
+  previewTimer = setTimeout(flushVisiblePreview, 350)
+  if (conflictPath === state.current.path) {
+    const localVersion = document.getElementById('conflict-local')
+    if (localVersion) localVersion.textContent = editor?.view.state.doc.toString() ?? ''
+  }
   setSaveState('dirty')
-  if (state.current.scratch) return // scratch drafts save only on demand
+  if (state.current.scratch || conflictPath === state.current.path) return
   clearTimeout(state.saveTimer)
   state.saveTimer = setTimeout(saveCurrent, 600)
 }
 
-async function saveCurrent() {
-  if (!state.current || !editor) return
-  if (state.current.scratch) {
-    await materializeScratch()
-    return
-  }
+let pendingSave: Promise<boolean> = Promise.resolve(true)
+
+async function saveCurrent(): Promise<boolean> {
+  if (!state.current || !editor) return true
+  flushTypingStats()
+  if (state.current.scratch) return !!(await materializeScratch())
+  const file = state.current
+  if (conflictPath === file.path) return false
   const content = editor.view.state.doc.toString()
-  const ok = await api.writeFile(state.current.path, content)
-  if (ok) {
-    editorCache.set(state.current.path, content)
-    setSaveState('clean')
+  const write = pendingSave.then(async () => {
+    if (conflictPath === file.path) return { ok: false, conflict: true }
+    if (state.current?.path === file.path && editor?.view.state.doc.toString() === content) setSaveState('saving')
+    const result = await api.writeFile(file.path, content, editorCache.get(file.path))
+    if (result.ok) editorCache.set(file.path, content)
+    return result
+  }).catch(() => ({ ok: false, conflict: false }))
+  pendingSave = write.then(result => result.ok)
+  const result = await write
+  if (result.conflict) markExternalConflict(file.path)
+  if (state.current?.path === file.path && editor.view.state.doc.toString() === content) {
+    if (result.ok) setSaveState('clean')
+    else if (!result.conflict) setSaveState('failed')
   }
+  return result.ok
+}
+
+async function saveBeforeSwitch(): Promise<boolean> {
+  flushTypingStats()
+  flushVisiblePreview()
+  clearTimeout(state.saveTimer)
+  await pendingSave
+  if (state.current && conflictPath === state.current.path) {
+    openConflictModal()
+    return false
+  }
+  if (state.current && (state.dirty || state.current.scratch) && !(await saveCurrent())) {
+    alert('保存失败，已保留当前笔记')
+    return false
+  }
+  return true
 }
 
 async function newNote() {
   // scratch flow: start writing immediately; pick a home at first save
   const draft: FileMeta = { path: 'scratch:未命名', name: '未命名.md', label: '未命名', scratch: true }
-  if (state.current && state.dirty) await saveCurrent()
+  const initial = '# 未命名\n\n'
+  if (!(await saveBeforeSwitch())) return
+  clearExternalConflict()
+  lastCount = wordStat(initial).words
   state.current = draft
   ensureEditor().view.dispatch({
-    changes: { from: 0, to: editor!.view.state.doc.length, insert: `# 未命名\n\n` }
+    changes: { from: 0, to: editor!.view.state.doc.length, insert: initial }
   })
   if (state.view === 'preview') {
     state.view = 'split'
   }
   applyView()
   renderFileList()
-  setSaveState('dirty')
-  updateStatus()
-  renderPreview()
-  renderOutline()
+  setSaveState('pending')
+  refreshDocument()
   editor!.view.focus()
 }
 
@@ -594,7 +957,7 @@ async function materializeScratch(): Promise<FileMeta | null> {
   const draft = state.current
   if (!draft || !draft.scratch) return draft ?? null
   if (!state.vault) {
-    const ok = await pickVault()
+    const ok = await pickVault(true)
     if (!ok) return null
   }
   const title = (editor?.view.state.doc.line(1).text.replace(/^#\s*/, '').trim()) || draft.label
@@ -609,12 +972,13 @@ async function materializeScratch(): Promise<FileMeta | null> {
     return null
   }
   const content = editor!.view.state.doc.toString()
-  const okWrite = await api.writeFile(r.path, content)
-  if (!okWrite) {
+  const result = await api.writeFile(r.path, content)
+  if (!result.ok) {
     alert('保存失败')
     return null
   }
   const real: FileMeta = { path: r.path, name: r.name || `${name}.md`, label: labelOf(r.name || `${name}.md`) }
+  setSaveState('clean')
   editorCache.set(real.path, content)
   state.current = real
   await refreshFiles(real.path)
@@ -623,19 +987,22 @@ async function materializeScratch(): Promise<FileMeta | null> {
 
 async function deleteCurrent() {
   if (!state.current) return
+  flushTypingStats()
   if (state.current.scratch) {
+    clearTimeout(state.saveTimer)
     // discard draft, back to welcome
     state.current = null
     editor?.view.dispatch({ changes: { from: 0, to: editor.view.state.doc.length, insert: '' } })
     applyView()
     renderFileList()
     setSaveState('clean')
-    updateStatus()
-    renderPreview()
-    renderOutline()
+    refreshDocument()
     return
   }
+  if (conflictPath === state.current.path) { openConflictModal(); return }
   if (!confirm(`把「${state.current.name}」移入回收站？`)) return
+  clearTimeout(state.saveTimer)
+  await pendingSave
   const ok = await api.deleteFile(state.current.path)
   if (!ok) {
     alert('移入回收站失败')
@@ -643,12 +1010,11 @@ async function deleteCurrent() {
   }
   editorCache.delete(state.current.path)
   state.current = null
+  clearExternalConflict()
   editor?.view.dispatch({ changes: { from: 0, to: editor.view.state.doc.length, insert: '' } })
   applyView()
   setSaveState('clean')
-  updateStatus()
-  renderPreview()
-  renderOutline()
+  refreshDocument()
   await refreshFiles()
 }
 
@@ -668,8 +1034,7 @@ async function renameCurrent() {
   }
   const newName = await askText('重命名为（不含扩展名）：', state.current.label)
   if (!newName || newName.trim() === state.current.label) return
-  const content = editor.view.state.doc.toString()
-  await api.writeFile(state.current.path, content) // flush pending changes first
+  if (!(await saveBeforeSwitch())) return
   const r = await api.renameFile(state.current.path, newName.trim())
   if (!r.ok || !r.path) {
     alert(r.error || '重命名失败')
@@ -686,8 +1051,7 @@ async function exportHtml() {
   if (!state.current || !editor) return
   const content = editor.view.state.doc.toString()
   const html = buildStandaloneHtml(state.current.label, content)
-  const where = await api.exportFile(`${state.current.label}.html`, html)
-  if (where) setSaveState('clean')
+  await api.exportFile(`${state.current.label}.html`, html)
 }
 
 async function exportPdf() {
@@ -697,15 +1061,25 @@ async function exportPdf() {
   await api.exportPdf(html)
 }
 
-async function pickVault(): Promise<boolean> {
+async function pickVault(skipSave = false): Promise<boolean> {
+  if (!skipSave && state.current && !(await saveBeforeSwitch())) return false
   const v = await api.pickFolder()
   if (!v) return false
+  if (!skipSave && state.current && !state.current.scratch && state.vault !== v) {
+    state.current = null
+    editor?.view.dispatch({ changes: { from: 0, to: editor.view.state.doc.length, insert: '' } })
+    setSaveState('clean')
+    refreshDocument()
+  }
+  if (state.vault !== v) editorCache.clear()
   state.vault = v
+  startVaultWatch(v)
   try { localStorage.setItem('inkwell:lastVault', v) } catch { /* ignore */ }
   vaultBtn.textContent = api.isElectron ? v.split(/[\\/]/).pop() || v : v
   vaultBtn.title = v
   applyView()
   await refreshFiles()
+  if (!skipSave && state.current?.scratch && !(await materializeScratch())) return false
   return true
 }
 
@@ -715,18 +1089,18 @@ async function openLooseFile() {
   if (!api.openFileDialog) return
   const r = await api.openFileDialog()
   if (!r) return
-  if (state.current && state.dirty) await saveCurrent()
-  ensureEditor().view.dispatch({
-    changes: { from: 0, to: editor!.view.state.doc.length, insert: r.content }
-  })
+  if (!(await saveBeforeSwitch())) return
+  editorCache.set(r.path, r.content)
+  clearExternalConflict()
   const label = r.path.split(/[\\/]/).pop()?.replace(/\.(md|markdown|txt)$/i, '') || '文件'
-  state.current = { path: r.path, name: r.path.split(/[\\/]/).pop() || label, label, scratch: true }
+  state.current = { path: r.path, name: r.path.split(/[\\/]/).pop() || label, label, scratch: !api.isElectron }
+  lastCount = wordStat(r.content).words
+  ensureEditor().view.dispatch({ changes: { from: 0, to: editor!.view.state.doc.length, insert: r.content } })
+  clearTimeout(state.saveTimer)
   applyView()
   renderFileList()
-  setSaveState('dirty')
-  updateStatus()
-  renderPreview()
-  renderOutline()
+  setSaveState(api.isElectron ? 'clean' : 'pending')
+  refreshDocument()
   editor!.view.focus()
 }
 
@@ -734,11 +1108,15 @@ async function openLooseFile() {
 
 async function resumeLastVault(): Promise<boolean> {
   let last: string | null = null
-  try { last = localStorage.getItem('inkwell:lastVault') } catch { /* ignore */ }
+  if (api.isElectron) last = await api.getLastVault?.() ?? null
+  else {
+    try { last = localStorage.getItem('inkwell:lastVault') } catch { /* ignore */ }
+  }
   if (!last) return false
   const r = await api.readDir(last)
   if (!r) return false
   state.vault = last
+  startVaultWatch(last)
   vaultBtn.textContent = api.isElectron ? last.split(/[\\/]/).pop() || last : last
   vaultBtn.title = last
   applyView()
@@ -752,7 +1130,7 @@ function renderGraphView() {
   const svg = $('#graph-svg')
   const input = state.files.filter(f => !f.scratch).map(f => ({
     label: f.label,
-    outgoing: extractWikiLinks(editorCache.get(f.path) ?? '').map(l => l.target)
+    outgoing: extractWikiLinks(f.path === state.current?.path && editor ? editor.view.state.doc.toString() : editorCache.get(f.path) ?? '').map(l => l.target)
   }))
   const g = layoutGraph({ nodes: input })
   svg.setAttribute('viewBox', `0 0 ${g.width} ${g.height}`)
@@ -765,18 +1143,24 @@ function renderGraphView() {
   }
   for (const n of g.nodes) {
     const r = n.orphan ? 6 : 7 + n.degree * 1.6
-    html += `<g class="g-node${n.id === state.current?.label ? ' cur' : ''}" data-id="${n.id}" transform="translate(${n.x.toFixed(1)},${n.y.toFixed(1)})">`
+    html += `<g class="g-node${n.id === state.current?.label ? ' cur' : ''}" transform="translate(${n.x.toFixed(1)},${n.y.toFixed(1)})">`
     html += `<circle r="${r.toFixed(1)}" ${n.orphan ? 'class="orphan"' : ''}/>`
     html += `<text y="${(r + 11).toFixed(1)}" text-anchor="middle"></text></g>`
   }
   svg.innerHTML = html
-  for (const t of svg.querySelectorAll<SVGTextElement>('.g-node text')) {
-    t.textContent = t.parentElement!.dataset.id || ''
-  }
-  svg.querySelectorAll<SVGGElement>('.g-node').forEach(el => {
-    el.addEventListener('click', () => {
-      const f = state.files.find(x => x.label === el.dataset.id)
+  svg.querySelectorAll<SVGGElement>('.g-node').forEach((el, i) => {
+    const label = g.nodes[i].id
+    el.querySelector('text')!.textContent = label
+    el.setAttribute('role', 'button')
+    el.setAttribute('tabindex', '0')
+    el.setAttribute('aria-label', label)
+    const open = () => {
+      const f = state.files.find(x => x.label === label)
       if (f) { closeGraphModal(); void openFile(f) }
+    }
+    el.addEventListener('click', open)
+    el.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open() }
     })
   })
 }
@@ -790,7 +1174,7 @@ function openGraphModal() {
     <div class="modal graph-modal">
       <div class="modal-head">
         <span class="label">关系图谱</span>
-        <button class="icon-btn" id="graph-close" title="关闭">✕</button>
+        <button class="icon-btn" id="graph-close" title="${t('close')}" aria-label="${t('close')}">✕</button>
       </div>
       <svg id="graph-svg"></svg>
     </div>`
@@ -820,7 +1204,7 @@ function toggleTheme() {
   const st = document.getElementById('st-save')
   if (st) {
     st.textContent = next === 'auto' ? '主题：跟随系统' : next === 'light' ? '主题：浅色' : '主题：深色'
-    setTimeout(() => { setSaveState(state.dirty ? 'dirty' : 'clean') }, 1500)
+    setTimeout(showSaveState, 1500)
   }
 }
 
@@ -1156,8 +1540,8 @@ function askText(title: string, initial: string): Promise<string | null> {
     wrap.className = 'modal-overlay'
     wrap.innerHTML = `
       <div class="modal ask-modal">
-        <div class="modal-head"><span class="label"></span></div>
-        <input id="ask-input" />
+        <div class="modal-head"><span class="label" id="ask-label"></span></div>
+        <input id="ask-input" aria-labelledby="ask-label" autocomplete="off" />
         <div class="ask-actions">
           <button id="ask-cancel">取消</button>
           <button id="ask-ok" class="primary">确定</button>
@@ -1204,14 +1588,14 @@ function commands(): Command[] {
     { id: 'vp', icon: '▷', label: '视图：仅预览', hint: `${MOD}+3`, run: () => setView('preview') },
     { id: 'theme', icon: state.theme === 'dark' ? '☀' : '☾', label: '切换明暗主题', run: toggleTheme },
     { id: 'tw', icon: '⌶', label: '打字机专注模式', hint: `${MOD}+J`, run: () => setTypewriter(!state.typewriter) },
-    { id: 'save', icon: '⟳', label: '保存当前笔记', hint: `${MOD}+S`, run: saveCurrent },
+    { id: 'save', icon: '⟳', label: '保存当前笔记', hint: `${MOD}+S`, run: async () => { await saveCurrent() } },
     { id: 'outline', icon: '☰', label: '大纲面板：开/关', run: () => { outlineOpen = !outlineOpen; applyOutline() } },
     { id: 'graph', icon: '⬡', label: '查看关系图谱', run: openGraphModal },
     { id: 'search', icon: '⌕', label: '全文搜索', hint: `${MOD}+⇧F`, run: openSearch },
     { id: 'switch', icon: '⇄', label: '快速切换笔记', hint: `${MOD}+P`, run: openQuickSwitch },
     { id: 'trash', icon: '🗑', label: '回收站', run: () => void openTrash() },
     { id: 'settings', icon: '⚙', label: '打开设置', run: openSettings },
-    { id: 'folder', icon: '📁', label: '打开资料库文件夹…', run: pickVault }
+    { id: 'folder', icon: '📁', label: '打开资料库文件夹…', run: async () => { await pickVault() } }
   ]
   if (state.current) {
     list.push({ id: 'rename', icon: '✎', label: `重命名「${state.current.label}」`, run: renameCurrent })
@@ -1366,7 +1750,7 @@ function openSearch() {
         <span class="label">全文搜索</span>
         <button class="icon-btn" id="search-close" title="关闭" aria-label="关闭">✕</button>
       </div>
-      <input id="search-input" placeholder="在所有笔记的内容中搜索…" />
+      <input id="search-input" name="search" placeholder="${t('searchInput')}" aria-label="${t('searchInput')}" autocomplete="off" />
       <div class="palette-list" id="search-results"></div>
     </div>`
   wrap.addEventListener('mousedown', e => { if (e.target === wrap) closeSearch() })
@@ -1401,7 +1785,10 @@ function openSearch() {
       }
     }
     if (!hits.length) {
-      results.innerHTML = `<div class="palette-empty">没有包含「${q}」的笔记</div>`
+      const empty = document.createElement('div')
+      empty.className = 'palette-empty'
+      empty.textContent = `没有包含「${q}」的笔记`
+      results.appendChild(empty)
       return
     }
     for (const h of hits) {
@@ -1445,7 +1832,7 @@ function openQuickSwitch() {
         <span class="label">切换笔记</span>
         <button class="icon-btn" id="switch-close" title="关闭" aria-label="关闭">✕</button>
       </div>
-      <input id="switch-input" placeholder="笔记名…（最近打开的排前面）" />
+      <input id="switch-input" name="note" placeholder="${t('switchPh')}" aria-label="${t('switchTitle')}" autocomplete="off" />
       <div class="palette-list" id="switch-results"></div>
     </div>`
   wrap.addEventListener('mousedown', e => { if (e.target === wrap) closeSwitch() })
@@ -1498,7 +1885,7 @@ function openPalette() {
   wrap.className = 'palette-overlay'
   wrap.innerHTML = `
     <div class="palette">
-      <input id="palette-input" placeholder="${t('search')}" />
+      <input id="palette-input" name="command" placeholder="${t('search')}" aria-label="${t('palette')}" autocomplete="off" />
       <div class="palette-list" id="palette-list"></div>
     </div>`
   wrap.addEventListener('mousedown', e => {
@@ -1587,8 +1974,8 @@ $('#graph-btn').addEventListener('click', openGraphModal)
 $('#tw-btn').addEventListener('click', () => setTypewriter(!state.typewriter))
 $('#cmdk-btn').addEventListener('click', openPalette)
 $('#new-btn').addEventListener('click', newNote)
-vaultBtn.addEventListener('click', pickVault)
-$('#open-vault-btn').addEventListener('click', pickVault)
+vaultBtn.addEventListener('click', () => { void pickVault() })
+$('#open-vault-btn').addEventListener('click', () => { void pickVault() })
 $('#open-file-btn').addEventListener('click', () => void openLooseFile())
 $('#new-note-btn').addEventListener('click', newNote)
 filterInput.addEventListener('input', renderFileList)
@@ -1629,8 +2016,22 @@ window.addEventListener('keydown', e => {
   }
 })
 
-window.addEventListener('beforeunload', () => {
-  if (state.dirty && state.current && !state.current.scratch) void saveCurrent()
+let closingAfterSave = false
+window.addEventListener('beforeunload', e => {
+  if (!state.dirty) return
+  e.preventDefault()
+  if (api.isElectron && api.winControl) {
+    e.returnValue = false
+    if (conflictPath === state.current?.path) { openConflictModal(); return }
+    if (closingAfterSave) return
+    closingAfterSave = true
+    clearTimeout(state.saveTimer)
+    void saveCurrent().then(ok => {
+      closingAfterSave = false
+      if (ok) api.winControl?.('close')
+      else alert('笔记未能保存，请检查磁盘或选择资料库后重试。')
+    })
+  } else e.returnValue = ''
 })
 
 /* ---------- Boot ---------- */
@@ -1662,21 +2063,26 @@ applyView()
 applyOutline()
 setTypewriter(false)
 ensureEditor()
-updateStatus()
-renderPreview()
-renderOutline()
-setupContextMenus()
+refreshDocument()
 setupContextMenus()
 
 // handle "open with" from OS
 if (api.onOpenFile) {
   api.onOpenFile(async p => {
-    const dir = p.replace(/[\/][^\/]+$/, '')
-    const name = p.split(/[\/]/).pop()!
+    if (!(await saveBeforeSwitch())) return
+    if (conflictPath === state.current?.path) {
+      state.current = null
+      clearExternalConflict()
+      setSaveState('clean')
+    }
+    const dir = p.replace(/[\\/][^\\/]+$/, '')
+    const name = p.split(/[\\/]/).pop()!
     // treat file's folder as vault
+    if (state.vault !== dir) editorCache.clear()
     state.vault = dir
+    startVaultWatch(dir)
     try { localStorage.setItem('inkwell:lastVault', dir) } catch { }
-    vaultBtn.textContent = api.isElectron ? dir.split(/[\/]/).pop() || dir : dir
+    vaultBtn.textContent = api.isElectron ? dir.split(/[\\/]/).pop() || dir : dir
     vaultBtn.title = dir
     welcomeEl.style.display = 'none'
     await refreshFiles()
@@ -1684,14 +2090,16 @@ if (api.onOpenFile) {
     if (hit) await openFile(hit)
     else {
       // file not in listing (e.g. different ext casing): read directly
-      const content = (await api.readFile(p)) ?? ''
-      ensureEditor().view.dispatch({ changes: { from: 0, to: editor!.view.state.doc.length, insert: content } })
+      const content = await api.readFile(p)
+      if (content === null) { alert(`无法读取「${name}」`); return }
+      editorCache.set(p, content)
+      clearExternalConflict()
       state.current = { path: p, name, label: labelOf(name) }
+      lastCount = wordStat(content).words
+      ensureEditor().view.dispatch({ changes: { from: 0, to: editor!.view.state.doc.length, insert: content } })
       applyView()
       setSaveState('clean')
-      updateStatus()
-      renderPreview()
-      renderOutline()
+      refreshDocument()
     }
   })
 }

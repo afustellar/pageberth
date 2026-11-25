@@ -29,6 +29,7 @@ jobs:
 
       - name: Compile main process + frontend
         run: |
+          npm run icons
           npx tsc -p tsconfig.electron.json
           npx vite build --base ./
 

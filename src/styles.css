@@ -1,4 +1,4 @@
-﻿/* ============ Inkwell global styles ============
+﻿/* ============ Pageberth global styles ============
    All colors come from --ink-* variables injected by src/theme.ts.
    Do NOT hardcode colors here. */
 
@@ -238,6 +238,7 @@ input {
 }
 
 .pane-preview > *:first-child { margin-top: 8px; }
+.pane-preview > * { width: 100%; max-width: 680px; margin-inline: auto; }
 
 .pane-preview h1, .pane-preview h2, .pane-preview h3,
 .pane-preview h4, .pane-preview h5, .pane-preview h6 {
@@ -308,7 +309,7 @@ input {
   color: var(--ink-muted);
 }
 
-.welcome h2 {
+.welcome h1 {
   margin: 0;
   font-size: 20px;
   color: var(--ink-fg);
@@ -352,6 +353,15 @@ input {
 .statusbar .spacer { flex: 1; }
 
 .save-state.dirty { color: var(--ink-accent); }
+
+.conflict-review {
+  color: var(--ink-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  -webkit-app-region: no-drag;
+}
+
+.conflict-review:hover { color: var(--ink-fg); }
 
 /* ---------- Command palette ---------- */
 
@@ -567,6 +577,7 @@ input {
 }
 
 .g-node:hover circle { stroke: var(--ink-fg); stroke-width: 1.5; }
+.g-node:focus-visible circle { stroke: var(--ink-fg); stroke-width: 2; }
 
 .g-node.cur circle { stroke: var(--ink-fg); stroke-width: 2; }
 
@@ -644,6 +655,76 @@ input {
 
 .ask-actions button.primary:hover { opacity: 0.9; }
 
+/* Compare the in-memory draft against the latest readable file on disk. */
+.conflict-modal {
+  width: min(940px, 96vw);
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.conflict-description {
+  margin: 0;
+  padding: 12px 16px;
+  color: var(--ink-muted);
+  font-size: 13px;
+}
+
+.conflict-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  min-height: 0;
+  padding: 0 16px 12px;
+}
+
+.conflict-version { min-width: 0; min-height: 0; }
+.conflict-version h3 { margin: 0 0 6px; color: var(--ink-fg); font-size: 13px; }
+
+.conflict-version pre {
+  box-sizing: border-box;
+  width: 100%;
+  height: min(48vh, 420px);
+  min-height: 170px;
+  margin: 0;
+  padding: 12px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: var(--ink-bg);
+  color: var(--ink-fg);
+  border: 1px solid var(--ink-border);
+  border-radius: 8px;
+  font: 12px/1.6 ui-monospace, Consolas, monospace;
+}
+
+.conflict-error { margin: 0; padding: 0 16px 8px; color: var(--ink-accent); font-size: 12px; }
+
+.conflict-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 12px 16px;
+  border-top: 1px solid var(--ink-border);
+}
+
+.conflict-actions button {
+  padding: 6px 10px;
+  border: 1px solid var(--ink-border);
+  border-radius: 7px;
+  color: var(--ink-fg);
+}
+
+.conflict-actions button:hover:not(:disabled) { background: var(--ink-active); }
+.conflict-actions button:disabled { opacity: 0.5; cursor: not-allowed; }
+.conflict-actions button.primary { background: var(--ink-accent); color: var(--ink-bg); border-color: var(--ink-accent); }
+
+@media (max-width: 700px) {
+  .conflict-columns { grid-template-columns: 1fr; overflow-y: auto; }
+  .conflict-version pre { height: 25vh; min-height: 100px; }
+}
+
 /* scratch draft badge in file list */
 .file-item .draft-badge {
   margin-left: auto;
@@ -679,7 +760,7 @@ input {
   margin-right: -2px;
 }
 
-.brand svg { display: block; border-radius: 5px; }
+.brand img { display: block; border-radius: 5px; }
 
 .sr-only {
   position: absolute;
@@ -722,6 +803,14 @@ button:focus-visible, input:focus-visible {
 }
 
 .seg button:focus-visible { outline-offset: -2px; }
+
+.palette input:focus-visible,
+.sidebar input.search:focus-visible,
+.ask-modal input:focus-visible,
+.search-modal input:focus-visible {
+  outline: 2px solid var(--ink-accent);
+  outline-offset: -2px;
+}
 
 /* status bar numbers align (guidelines: tabular-nums for numeric readouts) */
 .statusbar { font-variant-numeric: tabular-nums; }

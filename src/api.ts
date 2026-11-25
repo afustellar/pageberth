@@ -1,12 +1,14 @@
 export interface InkwellApi {
   isElectron: boolean
   pickFolder(): Promise<string | null>
+  getLastVault?(): Promise<string | null>
   openFileDialog?(): Promise<{ path: string; content: string } | null>
   writeBinary?(dir: string, name: string, data: Uint8Array): Promise<{ ok: boolean; path?: string; error?: string }>
   readDir(dir: string): Promise<{ files: string[]; folders: string[] } | null>
   readFile(p: string): Promise<string | null>
-  writeFile(p: string, content: string): Promise<boolean>
+  writeFile(p: string, content: string, expected?: string): Promise<{ ok: boolean; conflict?: boolean }>
   createFile(dir: string, name: string): Promise<{ ok: boolean; path?: string; name?: string; error?: string }>
+  saveConflictCopy(vault: string | null, source: string, name: string, content: string): Promise<{ ok: boolean; path?: string; name?: string; canceled?: boolean; error?: string }>
   deleteFile(p: string): Promise<boolean>
   renameFile(p: string, newName: string): Promise<{ ok: boolean; path?: string; error?: string }>
   exportFile(defaultName: string, html: string): Promise<string | null>
@@ -22,6 +24,8 @@ export interface InkwellApi {
   onUpdateProgress?(cb: (p: { percent: number; bps: number }) => void): void
   onUpdateReady?(cb: () => void): void
   onOpenFile?(cb: (path: string) => void): void
+  watchVault?(dir: string): Promise<boolean>
+  onVaultChange?(cb: (vault: string, name: string | null, failed: boolean) => void): void
   winControl?(action: 'minimize' | 'maximize' | 'close'): void
   isMaximized?(): Promise<boolean>
 }
@@ -29,8 +33,12 @@ export interface InkwellApi {
 function lsGet(key: string): string | null {
   try { return localStorage.getItem('inkwell:' + key) } catch { return null }
 }
-function lsSet(key: string, v: string) {
-  try { localStorage.setItem('inkwell:' + key, v) } catch { /* ignore */ }
+function lsSet(key: string, v: string): boolean {
+  try { localStorage.setItem('inkwell:' + key, v); return true } catch { return false }
+}
+
+function lsRemove(key: string): boolean {
+  try { localStorage.removeItem('inkwell:' + key); return true } catch { return false }
 }
 
 const webApi: InkwellApi = {
@@ -42,9 +50,7 @@ const webApi: InkwellApi = {
     const name = ask ? await ask('给这个资料库起个名字：', '我的笔记') : prompt('给这个资料库起个名字：', '我的笔记')
     if (!name) return null
     const key = 'vault:' + name
-    if (!lsGet(key)) {
-      lsSet(key, JSON.stringify({ files: {} }))
-    }
+    if (!lsGet(key) && !lsSet(key, JSON.stringify({ files: {} }))) return null
     lsSet('lastVault', name)
     return name
   },
@@ -55,8 +61,12 @@ const webApi: InkwellApi = {
       let bin = ''
       for (const b of data) bin += String.fromCharCode(b)
       const b64 = btoa(bin)
+      const ext = name.split('.').pop()?.toLowerCase()
+      const mime = ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : ext === 'gif' ? 'image/gif' : ext === 'webp' ? 'image/webp' : 'image/png'
       const key = 'vault:' + dir + '/assets/' + name
-      lsSet(key, JSON.stringify({ dataUrl: 'data:image/png;base64,' + b64 }))
+      if (!lsSet(key, JSON.stringify({ dataUrl: `data:${mime};base64,${b64}` }))) {
+        return { ok: false, error: '图片存储失败' }
+      }
       return { ok: true, path: key }
     } catch (e) {
       return { ok: false, error: String(e) }
@@ -97,60 +107,92 @@ const webApi: InkwellApi = {
     return raw ? JSON.parse(raw).content : null
   },
 
-  async writeFile(p: string, content: string) {
+  async writeFile(p: string, content: string, expected?: string) {
     const raw = lsGet(p)
-    if (!raw) return false
+    if (!raw) return { ok: false }
     const entry = JSON.parse(raw)
+    if (expected !== undefined && entry.content !== expected) return { ok: false, conflict: true }
     entry.content = content
-    lsSet(p, JSON.stringify(entry))
-    return true
+    return { ok: lsSet(p, JSON.stringify(entry)) }
   },
 
   async createFile(vault: string, name: string) {
     const safe = name.replace(/[\\/:*?"<>|]/g, '-').trim()
     const key = `vault:${vault}/files/${safe}.md`
-    if (lsGet(key)) return { ok: false, error: '同名文件已存在' }
-    lsSet(key, JSON.stringify({ content: `# ${safe}\n\n` }))
+    if (lsGet(key) !== null) return { ok: false, error: '同名文件已存在' }
+    if (!lsSet(key, JSON.stringify({ content: `# ${safe}\n\n` }))) return { ok: false, error: '文件创建失败' }
     return { ok: true, path: key, name: `${safe}.md` }
+  },
+
+  async saveConflictCopy(vault: string | null, source: string, name: string, content: string) {
+    if (!vault || !source.startsWith(`vault:${vault}/files/`)) return { ok: false, error: '请先打开资料库' }
+    const ext = name.match(/\.(md|markdown|txt)$/i)?.[0]
+    if (!ext || /[\\/:*?"<>|]/.test(name)) return { ok: false, error: '文件名无效' }
+    const stem = name.slice(0, -ext.length)
+    for (let i = 1; i <= 999; i++) {
+      const fileName = `${stem}${i === 1 ? '' : ` ${i}`}${ext}`
+      const path = `vault:${vault}/files/${fileName}`
+      if (lsGet(path) !== null) continue
+      if (!lsSet(path, JSON.stringify({ content }))) return { ok: false, error: '副本保存失败' }
+      return { ok: true, path, name: fileName }
+    }
+    return { ok: false, error: '副本文件名已用尽' }
   },
 
   async deleteFile(p: string) {
     const raw = lsGet(p)
-    if (!raw) return false
-    // web recycle bin
-    const stamp = new Date().toISOString().replace(/[:.]/g, '-')
-    const name = p.split('/').pop() || 'file.md'
-    lsSet('trash/' + stamp + '-' + name, raw)
-    try { localStorage.removeItem('inkwell:' + p) } catch { return false }
-    return true
+    if (raw === null) return false
+    const filesAt = p.lastIndexOf('/files/')
+    if (!p.startsWith('vault:') || filesAt < 0) return false
+    const vault = p.slice('vault:'.length, filesAt)
+    const name = p.slice(filesAt + '/files/'.length)
+    const prefix = 'trash/' + encodeURIComponent(vault) + '/'
+    let time = Date.now()
+    let trashKey: string
+    do {
+      trashKey = prefix + new Date(time++).toISOString().replace(/[:.]/g, '-') + '-' + name
+    } while (lsGet(trashKey) !== null)
+    if (!lsSet(trashKey, raw)) return false
+    return lsRemove(p)
   },
 
   async listTrash(vault: string) {
+    const prefix = 'inkwell:trash/' + encodeURIComponent(vault) + '/'
+    const legacyPrefix = 'inkwell:trash/'
     try {
       const out: string[] = []
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i)
-        if (k && k.startsWith('inkwell:trash/')) out.push(k.slice('inkwell:trash/'.length))
+        if (k?.startsWith(prefix)) out.push(k.slice(prefix.length))
+        else if (k?.startsWith(legacyPrefix) && !k.slice(legacyPrefix.length).includes('/')) {
+          // Old trash records did not store a vault; keep them available for recovery.
+          out.push(k.slice(legacyPrefix.length))
+        }
       }
       return out.sort().reverse()
     } catch { return [] }
   },
 
   async restoreTrash(vault: string, name: string) {
-    const raw = lsGet('trash/' + name)
-    if (!raw) return { ok: false, error: '不存在' }
+    const scopedKey = 'trash/' + encodeURIComponent(vault) + '/' + name
+    const trashKey = lsGet(scopedKey) !== null ? scopedKey : 'trash/' + name
+    const raw = lsGet(trashKey)
+    if (raw === null) return { ok: false, error: '不存在' }
     const orig = name.replace(/^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z-/, '')
-    lsSet('vault:' + vault + '/files/' + orig, raw)
-    try { localStorage.removeItem('inkwell:trash/' + name) } catch { }
-    return { ok: true, path: 'vault:' + vault + '/files/' + orig }
+    const target = 'vault:' + vault + '/files/' + orig
+    if (lsGet(target) !== null) return { ok: false, error: '同名文件已存在' }
+    if (!lsSet(target, raw)) return { ok: false, error: '文件恢复失败' }
+    if (!lsRemove(trashKey)) return { ok: false, error: '回收站清理失败' }
+    return { ok: true, path: target }
   },
 
-  async emptyTrash() {
+  async emptyTrash(vault: string) {
+    const prefix = 'inkwell:trash/' + encodeURIComponent(vault) + '/'
     try {
       const kill: string[] = []
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i)
-        if (k && k.startsWith('inkwell:trash/')) kill.push(k)
+        if (k && k.startsWith(prefix)) kill.push(k)
       }
       kill.forEach(k => localStorage.removeItem(k))
       return true
@@ -159,13 +201,14 @@ const webApi: InkwellApi = {
 
   async renameFile(p: string, newName: string) {
     const raw = lsGet(p)
-    if (!raw) return { ok: false, error: '文件不存在' }
+    if (raw === null) return { ok: false, error: '文件不存在' }
     const safe = newName.replace(/[\\/:*?"<>|]/g, '-').trim()
     const dir = p.slice(0, p.lastIndexOf('/files/') + 7)
     const target = `${dir}${safe}.md`
-    if (lsGet(target)) return { ok: false, error: '同名文件已存在' }
-    lsSet(target, raw)
-    try { localStorage.removeItem('inkwell:' + p) } catch { /* ignore */ }
+    if (target === p) return { ok: true, path: p }
+    if (lsGet(target) !== null) return { ok: false, error: '同名文件已存在' }
+    if (!lsSet(target, raw)) return { ok: false, error: '文件重命名失败' }
+    if (!lsRemove(p)) return { ok: false, error: '原文件删除失败' }
     return { ok: true, path: target }
   },
 

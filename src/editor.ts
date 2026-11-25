@@ -2,6 +2,7 @@
 import { EditorState, Compartment, type Extension } from '@codemirror/state'
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
+import { languages } from '@codemirror/language-data'
 import { searchKeymap, highlightSelectionMatches } from '@codemirror/search'
 import { syntaxHighlighting, HighlightStyle } from '@codemirror/language'
 import { tags as t } from '@lezer/highlight'
@@ -19,7 +20,17 @@ const inkHighlight = HighlightStyle.define([
   { tag: t.link, color: 'var(--ink-mdLink)', textDecoration: 'underline' },
   { tag: t.url, color: 'var(--ink-mdLink)' },
   { tag: t.quote, color: 'var(--ink-mdQuote)', fontStyle: 'italic' },
-  { tag: t.strikethrough, textDecoration: 'line-through', color: 'var(--ink-mdQuote)' }
+  { tag: t.strikethrough, textDecoration: 'line-through', color: 'var(--ink-mdQuote)' },
+  { tag: t.keyword, color: 'var(--ink-code-keyword)' },
+  { tag: t.string, color: 'var(--ink-code-string)' },
+  { tag: t.number, color: 'var(--ink-code-number)' },
+  { tag: t.comment, color: 'var(--ink-code-comment)', fontStyle: 'italic' },
+  { tag: t.function(t.variableName), color: 'var(--ink-code-title)' },
+  { tag: t.typeName, color: 'var(--ink-code-title)' },
+  { tag: t.variableName, color: 'var(--ink-code-variable)' },
+  { tag: t.propertyName, color: 'var(--ink-code-variable)' },
+  { tag: t.tagName, color: 'var(--ink-code-keyword)' },
+  { tag: t.attributeName, color: 'var(--ink-code-string)' },
 ])
 
 export const editorTheme = EditorView.theme({
@@ -55,7 +66,7 @@ export type EditorHandle = {
   darkComp: Compartment
 }
 
-export function createEditor(parent: HTMLElement, doc: string, onChange: (v: string) => void, extra: Extension[] = []) {
+export function createEditor(parent: HTMLElement, doc: string, onChange: () => void, extra: Extension[] = []) {
   const themeComp = new Compartment()
   const darkComp = new Compartment()
 
@@ -72,16 +83,17 @@ export function createEditor(parent: HTMLElement, doc: string, onChange: (v: str
         crosshairCursor(),
         dropCursor(),
         history(),
-        markdown({ base: markdownLanguage }),
+        markdown({ base: markdownLanguage, codeLanguages: languages }),
         syntaxHighlighting(inkHighlight),
         editorTheme,
+        EditorView.lineWrapping,
         themeComp.of([]),
         darkComp.of([]),
         highlightSelectionMatches(),
         ...extra,
         keymap.of([...searchKeymap, ...historyKeymap, ...defaultKeymap, indentWithTab]),
         EditorView.updateListener.of(u => {
-          if (u.docChanged) onChange(view.state.doc.toString())
+          if (u.docChanged) onChange()
         })
       ]
     })

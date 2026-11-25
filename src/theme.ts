@@ -59,7 +59,7 @@ const light: Record<string, string> = {
   panel: '#FDFCFA',
   border: '#ECEAE3',
   fg: '#2C2C2A',
-  muted: '#8A887F',
+  muted: '#6C6A62',
   active: '#F6F4EF',
   input: '#F9F8F4',
   accent: '#D85A30',
