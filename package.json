@@ -54,7 +54,7 @@
     "publish": {
       "provider": "github",
       "owner": "afustellar",
-      "repo": "inkwell"
+      "repo": "pageberth"
     },
     "win": {
       "icon": "build/icon.ico",

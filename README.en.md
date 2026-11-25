@@ -4,7 +4,7 @@
 
 **A quiet berth for your words.**
 
-[![status](https://img.shields.io/badge/version-0.1.0--alpha-orange)](https://github.com/afustellar/inkwell/releases)
+[![status](https://img.shields.io/badge/version-0.1.0--alpha-orange)](https://github.com/afustellar/pageberth/releases)
 [![platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-blue)](#download)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -43,7 +43,7 @@ Pageberth is a **local-first** Markdown writing app: open a folder, and that fol
 
 ## Download
 
-Grab the latest build from [Releases](https://github.com/afustellar/inkwell/releases):
+Grab the latest build from [Releases](https://github.com/afustellar/pageberth/releases):
 
 | Platform | File | Notes |
 |----------|------|-------|
@@ -66,7 +66,7 @@ npm run electron:build  # produce installers to release/
 
 Stack: Electron · Vite · TypeScript (no framework, vanilla DOM) · CodeMirror 6 · marked + DOMPurify · highlight.js
 
-Opening a single file grants access only to that file. To paste images, open its containing folder as a vault. The renamed app keeps its existing app identity and profile path so your notes and settings carry over. Existing installers in Releases still bear the Inkwell name.
+Opening a single file grants access only to that file. To paste images, open its containing folder as a vault. The renamed app keeps its existing app identity and profile path so your notes and settings carry over. Installers in GitHub Releases use the Pageberth name.
 
 ## License
 

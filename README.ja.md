@@ -4,7 +4,7 @@
 
 **言葉が静かに泊まる場所。**
 
-[![status](https://img.shields.io/badge/version-0.1.0--alpha-orange)](https://github.com/afustellar/inkwell/releases)
+[![status](https://img.shields.io/badge/version-0.1.0--alpha-orange)](https://github.com/afustellar/pageberth/releases)
 [![platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-blue)](#ダウンロード)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -43,7 +43,7 @@
 
 ## ダウンロード
 
-[Releases](https://github.com/afustellar/inkwell/releases) から最新ビルドを入手：
+[Releases](https://github.com/afustellar/pageberth/releases) から最新ビルドを入手：
 
 | プラットフォーム | ファイル | 備考 |
 |------------------|----------|------|
@@ -66,7 +66,7 @@ npm run electron:build  # release/ にインストーラを生成
 
 スタック：Electron · Vite · TypeScript（フレームワークなし、素の DOM）· CodeMirror 6 · marked + DOMPurify · highlight.js
 
-単一ファイルだけを開いた場合、アクセス権はそのファイルに限られます。画像を貼り付けるには、そのファイルのフォルダをボルトとして開いてください。名称変更後もアプリ識別子と設定保存先は維持されます。既存の Releases のインストーラ名は Inkwell のままです。
+単一ファイルだけを開いた場合、アクセス権はそのファイルに限られます。画像を貼り付けるには、そのファイルのフォルダをボルトとして開いてください。名称変更後もアプリ識別子と設定保存先は維持されます。GitHub Releases のインストーラ名は Pageberth です。
 
 ## License
 

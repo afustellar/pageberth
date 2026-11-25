@@ -4,7 +4,7 @@
 
 **让文字，找到停泊的地方。**
 
-[![status](https://img.shields.io/badge/version-0.1.0--alpha-orange)](https://github.com/afustellar/inkwell/releases)
+[![status](https://img.shields.io/badge/version-0.1.0--alpha-orange)](https://github.com/afustellar/pageberth/releases)
 [![platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-blue)](#下载安装)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -43,7 +43,7 @@
 
 ## 下载安装
 
-从 [Releases](https://github.com/afustellar/inkwell/releases) 下载：
+从 [Releases](https://github.com/afustellar/pageberth/releases) 下载：
 
 | 平台 | 文件 | 说明 |
 |------|------|------|
@@ -68,7 +68,7 @@ npm run electron:build  # 产出安装包到 release/
 
 桌面版文件权限由主进程管理：选择资料库或通过系统“打开方式”启动会授权该目录；单独选择文件只授权该文件。重启后仅恢复最近授权的资料库，渲染进程保存的路径不会自行获得文件权限。
 
-使用“打开文件”单独选中的文件只获得该文件的访问权限；如需粘贴图片，请打开它所在的文件夹作为资料库。更名保留原应用标识和用户资料路径，现有笔记及设置继续可用。当前 Releases 中的旧安装包仍显示 Inkwell，更新后的构建名称为 Pageberth。
+使用“打开文件”单独选中的文件只获得该文件的访问权限；如需粘贴图片，请打开它所在的文件夹作为资料库。更名保留原应用标识和用户资料路径，现有笔记及设置继续可用。GitHub Releases 中的安装包使用 Pageberth 名称。
 
 ## License
 
